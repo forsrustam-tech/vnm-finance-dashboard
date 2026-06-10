@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ВНМ — Финансы</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css" />
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div id="login-screen" class="login-screen hidden">
+    <div class="login-card">
+      <div class="login-logo">ВНМ</div>
+      <h1>Вход в финансы</h1>
+      <p>Введите email и пароль. Этот экран нужен только при включенном Supabase.</p>
+      <input id="login-email" type="email" placeholder="Email" autocomplete="email" />
+      <input id="login-password" type="password" placeholder="Пароль" autocomplete="current-password" />
+      <button class="primary-btn" id="login-btn">Войти</button>
+      <div id="login-error" class="login-error"></div>
+    </div>
+  </div>
+
+  <div class="app" id="app">
+    <div class="topbar">
+      <span class="title">ВНМ — финансы <span class="month-badge" id="month-badge"></span></span>
+      <button class="tab-btn active" id="btn-dash" data-tab="dash"><i class="ti ti-chart-bar"></i> Дашборд</button>
+      <button class="tab-btn" id="btn-jnl" data-tab="jnl"><i class="ti ti-list"></i> Журнал выплат</button>
+      <button class="tab-btn" id="btn-tools" data-tab="tools"><i class="ti ti-settings"></i> Настройки</button>
+      <select id="month-sel"></select>
+      <button class="tab-btn danger-soft hidden" id="logout-btn"><i class="ti ti-logout"></i> Выйти</button>
+    </div>
+
+    <div id="pg-dash">
+      <div class="kpi-grid">
+        <div class="kpi"><div class="kpi-label">Приходы</div><div class="kpi-val kv-g" id="kpi-inc">0 ₸</div></div>
+        <div class="kpi"><div class="kpi-label">Расходы</div><div class="kpi-val kv-r" id="kpi-exp">0 ₸</div></div>
+        <div class="kpi"><div class="kpi-label">Прибыль</div><div class="kpi-val" id="kpi-prf">0 ₸</div></div>
+      </div>
+      <div id="sections"></div>
+    </div>
+
+    <div class="page hidden" id="pg-jnl">
+      <div class="jnl-kpi">
+        <div class="jkpi"><div class="jkpi-l">Всего выплат</div><div class="jkpi-v" id="j-cnt">0</div></div>
+        <div class="jkpi"><div class="jkpi-l">Сумма</div><div class="jkpi-v" id="j-sum">0 ₸</div></div>
+        <div class="jkpi"><div class="jkpi-l">Зарплата</div><div class="jkpi-v" id="j-sal">0 ₸</div></div>
+        <div class="jkpi"><div class="jkpi-l">Сервисы</div><div class="jkpi-v" id="j-srv">0 ₸</div></div>
+      </div>
+      <div class="jtable-wrap">
+        <div class="table-scroll">
+          <table class="jtbl">
+            <thead><tr>
+              <th style="width:96px">Дата</th>
+              <th style="width:130px">Кому</th>
+              <th>Назначение</th>
+              <th style="width:110px;text-align:right">Сумма ₸</th>
+              <th style="width:100px;text-align:center">Категория</th>
+              <th style="width:110px;text-align:center">Статус</th>
+              <th style="width:34px"></th>
+            </tr></thead>
+            <tbody id="jbody"></tbody>
+          </table>
+        </div>
+        <button class="jadd" id="add-payment-btn"><i class="ti ti-plus"></i> добавить выплату</button>
+      </div>
+    </div>
+
+    <div class="page hidden" id="pg-tools">
+      <div class="tools-grid">
+        <div class="tool-card">
+          <h3>Месяцы</h3>
+          <p>Создай новый месяц или скопируй текущий. Удобно для ежемесячной отчетности.</p>
+          <div class="tool-actions">
+            <button class="primary-btn" id="new-month-btn"><i class="ti ti-calendar-plus"></i> Создать месяц</button>
+            <button class="secondary-btn" id="copy-month-btn"><i class="ti ti-copy"></i> Скопировать текущий месяц</button>
+          </div>
+        </div>
+        <div class="tool-card">
+          <h3>Резервная копия</h3>
+          <p>Экспортируй данные перед правками. Если что-то сломается — можно импортировать обратно.</p>
+          <div class="tool-actions">
+            <button class="secondary-btn" id="export-btn"><i class="ti ti-download"></i> Экспорт JSON</button>
+            <label class="secondary-btn file-btn"><i class="ti ti-upload"></i> Импорт JSON<input id="import-file" type="file" accept="application/json" hidden /></label>
+          </div>
+        </div>
+        <div class="tool-card danger-zone">
+          <h3>Сброс</h3>
+          <p>Сбросить локальные данные до стартового шаблона. В Supabase-режиме не используется.</p>
+          <button class="danger-btn" id="reset-btn"><i class="ti ti-trash"></i> Сбросить локальные данные</button>
+        </div>
+        <div class="tool-card">
+          <h3>Режим хранения</h3>
+          <p id="storage-mode-text">Проверяем...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="save-toast" id="toast">Сохранено</div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./config.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
