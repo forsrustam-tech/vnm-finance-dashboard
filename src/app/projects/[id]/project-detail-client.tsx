@@ -28,6 +28,15 @@ type Document = {
   created_at: string;
 };
 
+type Assignment = {
+  id: number;
+  user_id: number;
+  payout_rate: string;
+  user_name: string;
+};
+
+type Targetolog = { id: number; name: string; role_name: string };
+
 type MetaAccount = { id: string; name: string; account_id: string };
 
 export default function ProjectDetailClient({ projectId }: { projectId: number }) {
@@ -39,12 +48,20 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
   const [project, setProject] = useState<Project | null>(null);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [targetologs, setTargetologs] = useState<Targetolog[]>([]);
+  const [canManageProjects, setCanManageProjects] = useState(false);
   const [loading, setLoading] = useState(true);
   const [syncingId, setSyncingId] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
 
   const [metaAccounts, setMetaAccounts] = useState<MetaAccount[] | null>(null);
   const [selectedAccount, setSelectedAccount] = useState("");
+
+  const [newUserId, setNewUserId] = useState("");
+  const [newRate, setNewRate] = useState("");
+  const [assignError, setAssignError] = useState("");
+  const [rateDrafts, setRateDrafts] = useState<Record<number, string>>({});
 
   async function load() {
     const res = await fetch(`/api/projects/${projectId}`);
@@ -53,6 +70,10 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
       setProject(data.project);
       setConnections(data.connections);
       setDocuments(data.documents);
+      setAssignments(data.assignments);
+      setTargetologs(data.targetologs ?? []);
+      setCanManageProjects(data.canManageProjects);
+      setRateDrafts(Object.fromEntries(data.assignments.map((a: Assignment) => [a.id, a.payout_rate])));
     }
     setLoading(false);
   }
@@ -114,6 +135,39 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
     load();
   }
 
+  async function addAssignment(e: React.FormEvent) {
+    e.preventDefault();
+    setAssignError("");
+    const res = await fetch(`/api/projects/${projectId}/assignments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: Number(newUserId), payoutRate: Number(newRate) }),
+    });
+    if (res.ok) {
+      setNewUserId("");
+      setNewRate("");
+      load();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setAssignError(data.error ?? "Ошибка назначения");
+    }
+  }
+
+  async function saveRate(assignmentId: number) {
+    const value = rateDrafts[assignmentId];
+    await fetch(`/api/assignments/${assignmentId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payoutRate: Number(value) }),
+    });
+    load();
+  }
+
+  async function removeAssignment(assignmentId: number) {
+    await fetch(`/api/assignments/${assignmentId}`, { method: "DELETE" });
+    load();
+  }
+
   if (loading || !project) return <p className="text-gray-500">Загрузка...</p>;
 
   return (
@@ -151,6 +205,79 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
             </button>
           </div>
         </div>
+      )}
+
+      {canManageProjects && (
+        <section className="mt-6 rounded-xl border border-gray-200 bg-white shadow-sm p-5">
+          <h2 className="text-lg font-medium">Команда и выплаты</h2>
+
+          {assignments.length === 0 ? (
+            <p className="mt-3 text-sm text-gray-500">На проект пока никто не назначен.</p>
+          ) : (
+            <div className="mt-3 divide-y divide-gray-100">
+              {assignments.map((a) => (
+                <div key={a.id} className="flex items-center justify-between gap-3 py-2">
+                  <span className="text-sm">{a.user_name}</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={0}
+                      value={rateDrafts[a.id] ?? ""}
+                      onChange={(e) => setRateDrafts((prev) => ({ ...prev, [a.id]: e.target.value }))}
+                      className="w-32 rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                    />
+                    <span className="text-xs text-gray-400">₸/мес</span>
+                    <button
+                      onClick={() => saveRate(a.id)}
+                      className="rounded-lg border border-gray-300 px-2 py-1 text-xs"
+                    >
+                      Сохранить
+                    </button>
+                    <button
+                      onClick={() => removeAssignment(a.id)}
+                      className="text-xs text-red-600 underline"
+                    >
+                      Убрать
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {targetologs.filter((t) => !assignments.some((a) => a.user_id === t.id)).length > 0 && (
+            <form onSubmit={addAssignment} className="mt-4 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-4">
+              <select
+                required
+                value={newUserId}
+                onChange={(e) => setNewUserId(e.target.value)}
+                className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+              >
+                <option value="">Выберите сотрудника</option>
+                {targetologs
+                  .filter((t) => !assignments.some((a) => a.user_id === t.id))
+                  .map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} ({t.role_name})
+                    </option>
+                  ))}
+              </select>
+              <input
+                type="number"
+                required
+                min={0}
+                placeholder="Ставка, ₸/мес"
+                value={newRate}
+                onChange={(e) => setNewRate(e.target.value)}
+                className="w-36 rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+              />
+              <button type="submit" className="rounded-lg bg-red-600 hover:bg-red-700 px-3 py-1.5 text-sm text-white">
+                Назначить
+              </button>
+              {assignError && <p className="w-full text-sm text-red-600">{assignError}</p>}
+            </form>
+          )}
+        </section>
       )}
 
       <section className="mt-6 rounded-xl border border-gray-200 bg-white shadow-sm p-5">

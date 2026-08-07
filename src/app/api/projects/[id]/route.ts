@@ -75,11 +75,22 @@ export async function GET(
     ORDER BY created_at DESC
   `;
 
+  const targetologs = user.canManageProjects
+    ? await sql`
+        SELECT u.id, u.name, r.name AS role_name
+        FROM users u
+        JOIN roles r ON r.id = u.role_id
+        WHERE r.can_view_all_finance = false
+        ORDER BY u.name
+      `
+    : [];
+
   return NextResponse.json({
     project,
     assignments,
     connections: connections.map((c) => ({ ...c, summary: summaries[c.id] ?? null })),
     documents,
+    targetologs,
     canManageProjects: user.canManageProjects,
   });
 }
