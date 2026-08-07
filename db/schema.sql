@@ -85,6 +85,16 @@ CREATE TABLE IF NOT EXISTS project_documents (
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS amo_connections (
+  id             SERIAL PRIMARY KEY,
+  project_id     INTEGER NOT NULL UNIQUE REFERENCES projects(id) ON DELETE CASCADE,
+  subdomain      TEXT NOT NULL,
+  access_token   TEXT NOT NULL, -- long-lived token from a private integration in the client's amoCRM
+  connected_by   INTEGER REFERENCES users(id),
+  connected_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE INDEX IF NOT EXISTS idx_documents_project_id ON project_documents(project_id);
 CREATE INDEX IF NOT EXISTS idx_connections_project_id ON ad_account_connections(project_id);
 CREATE INDEX IF NOT EXISTS idx_snapshots_connection_id ON ad_spend_snapshots(connection_id);

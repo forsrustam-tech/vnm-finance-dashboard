@@ -31,15 +31,24 @@ export async function GET(
   }
 
   const projects = await sql`SELECT * FROM projects WHERE id = ${id}`;
-  const project = projects[0];
-  if (!project) return NextResponse.json({ error: "Проект не найден" }, { status: 404 });
+  const rawProject = projects[0];
+  if (!rawProject) return NextResponse.json({ error: "Проект не найден" }, { status: 404 });
 
-  const assignments = await sql`
+  // Revenue and payment dates are agency finances — only Owner/Director see them.
+  const project = user.canManageProjects
+    ? rawProject
+    : { id: rawProject.id, name: rawProject.name, status: rawProject.status };
+
+  const allAssignments = await sql`
     SELECT pa.id, pa.user_id, pa.payout_rate, u.name AS user_name
     FROM project_assignments pa
     JOIN users u ON u.id = pa.user_id
     WHERE pa.project_id = ${id}
   `;
+  // Targetologs only see their own payout, not teammates'.
+  const assignments = user.canManageProjects
+    ? allAssignments
+    : allAssignments.filter((a) => a.user_id === user.id);
 
   const connections = await sql`
     SELECT id, platform, ad_account_id, connected_at
@@ -85,12 +94,16 @@ export async function GET(
       `
     : [];
 
+  const amoRows = await sql`SELECT subdomain FROM amo_connections WHERE project_id = ${id}`;
+  const amoConnection = amoRows[0] ? { subdomain: amoRows[0].subdomain } : null;
+
   return NextResponse.json({
     project,
     assignments,
     connections: connections.map((c) => ({ ...c, summary: summaries[c.id] ?? null })),
     documents,
     targetologs,
+    amoConnection,
     canManageProjects: user.canManageProjects,
   });
 }
