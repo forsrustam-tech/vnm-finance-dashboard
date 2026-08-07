@@ -87,16 +87,16 @@ export default function RolesClient() {
 
   return (
     <div>
-      <form onSubmit={handleAdd} className="mt-6 flex gap-3 rounded-xl border border-gray-200 p-4">
+      <form onSubmit={handleAdd} className="mt-6 flex gap-3 rounded-xl border border-gray-200 bg-white shadow-sm p-4">
         <input
           type="text"
           required
           placeholder="Название новой роли"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="flex-1 rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-black"
+          className="flex-1 rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-red-500"
         />
-        <button type="submit" className="rounded-lg bg-black px-4 py-2 font-medium text-white">
+        <button type="submit" className="rounded-lg bg-red-600 hover:bg-red-700 px-4 py-2 font-medium text-white">
           Добавить роль
         </button>
         {error && <p className="w-full text-sm text-red-600">{error}</p>}
@@ -104,7 +104,7 @@ export default function RolesClient() {
 
       <div className="mt-6 flex flex-col gap-4">
         {roles.map((role) => (
-          <div key={role.id} className="rounded-xl border border-gray-200 p-4">
+          <div key={role.id} className="rounded-xl border border-gray-200 bg-white shadow-sm p-4">
             <div className="flex items-center justify-between">
               <p className="font-medium">
                 {role.name} {role.is_system && <span className="text-xs text-gray-400">(системная)</span>}

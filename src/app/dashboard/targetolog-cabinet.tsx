@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { formatPeriod } from "@/lib/period";
 
 type Project = {
@@ -37,15 +38,15 @@ export default function TargetologCabinet({
       <h1 className="text-2xl font-semibold">Мои проекты — {formatPeriod(period)}</h1>
 
       <div className="mt-6 grid grid-cols-3 gap-4">
-        <div className="rounded-xl border border-gray-200 p-5">
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-5">
           <p className="text-sm text-gray-500">Проектов</p>
           <p className="mt-1 text-3xl font-semibold">{myProjects.length}</p>
         </div>
-        <div className="rounded-xl border border-gray-200 p-5">
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-5">
           <p className="text-sm text-gray-500">Всего за месяц</p>
           <p className="mt-1 text-3xl font-semibold">{totalEarned.toLocaleString("ru-RU")} ₸</p>
         </div>
-        <div className="rounded-xl border border-gray-200 p-5">
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-5">
           <p className="text-sm text-gray-500">Выплачено</p>
           <p className="mt-1 text-3xl font-semibold text-green-600">
             {totalPaid.toLocaleString("ru-RU")} ₸
@@ -60,10 +61,12 @@ export default function TargetologCabinet({
         {myProjects.map((a) => (
           <div
             key={a.id}
-            className="flex items-center justify-between rounded-xl border border-gray-200 p-5"
+            className="flex items-center justify-between rounded-xl border border-gray-200 bg-white shadow-sm p-5"
           >
             <div>
-              <p className="font-medium">{a.project!.name}</p>
+              <Link href={`/projects/${a.project!.id}`} className="font-medium underline">
+                {a.project!.name}
+              </Link>
               <p className="text-sm text-gray-500">
                 {a.project!.status === "active" ? "Активен" : a.project!.status === "paused" ? "На паузе" : "Завершён"}
               </p>

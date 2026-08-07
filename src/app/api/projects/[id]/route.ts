@@ -10,6 +10,80 @@ const patchSchema = z.object({
   notes: z.string().optional(),
 });
 
+async function canAccessProject(user: { id: number; canManageProjects: boolean }, projectId: string) {
+  if (user.canManageProjects) return true;
+  const rows = await sql`
+    SELECT 1 FROM project_assignments WHERE user_id = ${user.id} AND project_id = ${projectId}
+  `;
+  return rows.length > 0;
+}
+
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { id } = await params;
+  if (!(await canAccessProject(user, id))) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const projects = await sql`SELECT * FROM projects WHERE id = ${id}`;
+  const project = projects[0];
+  if (!project) return NextResponse.json({ error: "Проект не найден" }, { status: 404 });
+
+  const assignments = await sql`
+    SELECT pa.id, pa.user_id, pa.payout_rate, u.name AS user_name
+    FROM project_assignments pa
+    JOIN users u ON u.id = pa.user_id
+    WHERE pa.project_id = ${id}
+  `;
+
+  const connections = await sql`
+    SELECT id, platform, ad_account_id, connected_at
+    FROM ad_account_connections
+    WHERE project_id = ${id}
+    ORDER BY created_at DESC
+  `;
+
+  const connectionIds = connections.map((c) => c.id);
+  const summaries: Record<number, { spend: number; impressions: number; clicks: number; leads: number; days: number }> = {};
+  if (connectionIds.length > 0) {
+    const snapshots = await sql`
+      SELECT connection_id, spend, impressions, clicks, leads
+      FROM ad_spend_snapshots
+      WHERE connection_id = ANY(${connectionIds})
+      AND date >= now() - interval '30 days'
+    `;
+    for (const s of snapshots) {
+      const acc = summaries[s.connection_id] ?? { spend: 0, impressions: 0, clicks: 0, leads: 0, days: 0 };
+      acc.spend += Number(s.spend);
+      acc.impressions += Number(s.impressions);
+      acc.clicks += Number(s.clicks);
+      acc.leads += Number(s.leads);
+      acc.days += 1;
+      summaries[s.connection_id] = acc;
+    }
+  }
+
+  const documents = await sql`
+    SELECT id, file_name, content_type, size_bytes, created_at
+    FROM project_documents
+    WHERE project_id = ${id}
+    ORDER BY created_at DESC
+  `;
+
+  return NextResponse.json({
+    project,
+    assignments,
+    connections: connections.map((c) => ({ ...c, summary: summaries[c.id] ?? null })),
+    documents,
+    canManageProjects: user.canManageProjects,
+  });
+}
+
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }

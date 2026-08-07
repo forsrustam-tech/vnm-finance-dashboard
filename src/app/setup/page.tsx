@@ -45,7 +45,7 @@ export default function SetupPage() {
           placeholder="Ваше имя"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-black"
+          className="rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-red-500"
         />
         <input
           type="tel"
@@ -53,7 +53,7 @@ export default function SetupPage() {
           placeholder="Телефон"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
-          className="rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-black"
+          className="rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-red-500"
         />
         <input
           type="password"
@@ -62,13 +62,13 @@ export default function SetupPage() {
           placeholder="Придумайте пароль"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-black"
+          className="rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-red-500"
         />
         {error && <p className="text-sm text-red-600">{error}</p>}
         <button
           type="submit"
           disabled={loading}
-          className="rounded-lg bg-black px-4 py-3 font-medium text-white disabled:opacity-50"
+          className="rounded-lg bg-red-600 hover:bg-red-700 px-4 py-3 font-medium text-white disabled:opacity-50"
         >
           {loading ? "..." : "Создать аккаунт владельца"}
         </button>

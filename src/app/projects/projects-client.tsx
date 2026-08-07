@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 type Project = {
   id: number;
@@ -96,14 +97,14 @@ export default function ProjectsClient() {
 
   return (
     <div>
-      <form onSubmit={handleAdd} className="mt-6 flex flex-wrap gap-3 rounded-xl border border-gray-200 p-4">
+      <form onSubmit={handleAdd} className="mt-6 flex flex-wrap gap-3 rounded-xl border border-gray-200 bg-white shadow-sm p-4">
         <input
           type="text"
           required
           placeholder="Название проекта / клиента"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="flex-1 min-w-[200px] rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-black"
+          className="flex-1 min-w-[200px] rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-red-500"
         />
         <input
           type="number"
@@ -112,7 +113,7 @@ export default function ProjectsClient() {
           placeholder="Доход в месяц, ₸"
           value={revenue}
           onChange={(e) => setRevenue(e.target.value)}
-          className="w-44 rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-black"
+          className="w-44 rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-red-500"
         />
         <input
           type="number"
@@ -121,9 +122,9 @@ export default function ProjectsClient() {
           placeholder="День оплаты"
           value={dueDay}
           onChange={(e) => setDueDay(e.target.value)}
-          className="w-36 rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-black"
+          className="w-36 rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-red-500"
         />
-        <button type="submit" className="rounded-lg bg-black px-4 py-2 font-medium text-white">
+        <button type="submit" className="rounded-lg bg-red-600 hover:bg-red-700 px-4 py-2 font-medium text-white">
           Добавить проект
         </button>
         {error && <p className="w-full text-sm text-red-600">{error}</p>}
@@ -131,10 +132,12 @@ export default function ProjectsClient() {
 
       <div className="mt-6 flex flex-col gap-4">
         {projects.map((p) => (
-          <div key={p.id} className="rounded-xl border border-gray-200 p-5">
+          <div key={p.id} className="rounded-xl border border-gray-200 bg-white shadow-sm p-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium">{p.name}</p>
+                <Link href={`/projects/${p.id}`} className="font-medium underline">
+                  {p.name}
+                </Link>
                 <p className="text-sm text-gray-500">
                   Доход: {Number(p.revenue_amount).toLocaleString("ru-RU")} ₸
                   {p.payment_due_day && ` · Оплата до ${p.payment_due_day} числа`}
@@ -258,7 +261,7 @@ function ProjectAssignments({
             onChange={(e) => setRate(e.target.value)}
             className="w-36 rounded-lg border border-gray-300 px-2 py-1 text-sm"
           />
-          <button type="submit" className="rounded-lg bg-black px-3 py-1 text-sm text-white">
+          <button type="submit" className="rounded-lg bg-red-600 hover:bg-red-700 px-3 py-1 text-sm text-white">
             Назначить
           </button>
           {error && <p className="w-full text-sm text-red-600">{error}</p>}

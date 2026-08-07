@@ -69,9 +69,25 @@ CREATE TABLE IF NOT EXISTS ad_spend_snapshots (
   spend        NUMERIC NOT NULL DEFAULT 0,
   impressions  BIGINT NOT NULL DEFAULT 0,
   clicks       BIGINT NOT NULL DEFAULT 0,
+  leads        BIGINT NOT NULL DEFAULT 0,
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (connection_id, date)
 );
+
+CREATE TABLE IF NOT EXISTS project_documents (
+  id            SERIAL PRIMARY KEY,
+  project_id    INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  file_name     TEXT NOT NULL,
+  pathname      TEXT NOT NULL, -- Vercel Blob pathname, used to generate signed download URLs
+  content_type  TEXT,
+  size_bytes    BIGINT,
+  uploaded_by   INTEGER REFERENCES users(id),
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_documents_project_id ON project_documents(project_id);
+CREATE INDEX IF NOT EXISTS idx_connections_project_id ON ad_account_connections(project_id);
+CREATE INDEX IF NOT EXISTS idx_snapshots_connection_id ON ad_spend_snapshots(connection_id);
 
 CREATE INDEX IF NOT EXISTS idx_users_role_id ON users(role_id);
 CREATE INDEX IF NOT EXISTS idx_assignments_project_id ON project_assignments(project_id);

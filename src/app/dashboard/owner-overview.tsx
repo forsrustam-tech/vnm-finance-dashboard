@@ -64,27 +64,27 @@ export default function OwnerOverview({
     <div>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Обзор — {formatPeriod(period)}</h1>
-        <Link href="/projects" className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white">
+        <Link href="/projects" className="rounded-lg bg-red-600 hover:bg-red-700 px-4 py-2 text-sm font-medium text-white">
           Управлять проектами
         </Link>
       </div>
 
       <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <div className="rounded-xl border border-gray-200 p-5">
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-5">
           <p className="text-sm text-gray-500">Активных проектов</p>
           <p className="mt-1 text-3xl font-semibold">{activeProjects.length}</p>
         </div>
-        <div className="rounded-xl border border-gray-200 p-5">
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-5">
           <p className="text-sm text-gray-500">Доход в месяц</p>
           <p className="mt-1 text-3xl font-semibold">{totalRevenue.toLocaleString("ru-RU")} ₸</p>
         </div>
-        <div className="rounded-xl border border-gray-200 p-5">
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-5">
           <p className="text-sm text-gray-500">Выплачено за период</p>
           <p className="mt-1 text-3xl font-semibold text-green-600">
             {totalPaid.toLocaleString("ru-RU")} ₸
           </p>
         </div>
-        <div className="rounded-xl border border-gray-200 p-5">
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-5">
           <p className="text-sm text-gray-500">Осталось выплатить</p>
           <p className="mt-1 text-3xl font-semibold text-amber-600">
             {(totalPayouts - totalPaid).toLocaleString("ru-RU")} ₸
@@ -102,10 +102,12 @@ export default function OwnerOverview({
         {projects.map((p) => {
           const projectAssignments = assignments.filter((a) => a.project_id === p.id);
           return (
-            <div key={p.id} className="rounded-xl border border-gray-200 p-5">
+            <div key={p.id} className="rounded-xl border border-gray-200 bg-white shadow-sm p-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium">{p.name}</p>
+                  <Link href={`/projects/${p.id}`} className="font-medium underline">
+                    {p.name}
+                  </Link>
                   <p className="text-sm text-gray-500">
                     {p.status === "active" ? "Активен" : p.status === "paused" ? "На паузе" : "Завершён"}
                     {" · "}
