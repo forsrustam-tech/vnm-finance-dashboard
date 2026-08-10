@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import AmoSection, { type AmoConnection } from "./amo-section";
 
 type Project = {
   id: number;
@@ -39,14 +40,6 @@ type Targetolog = { id: number; name: string; role_name: string };
 
 type MetaAccount = { id: string; name: string; account_id: string };
 
-type AmoConnection = { subdomain: string } | null;
-
-type AmoSummary = {
-  totalLeads: number;
-  byStage: { name: string; count: number }[];
-  recentLeads: { name: string; price: number; stageName: string; createdAt: string }[];
-};
-
 export default function ProjectDetailClient({ projectId }: { projectId: number }) {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -71,13 +64,7 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
   const [assignError, setAssignError] = useState("");
   const [rateDrafts, setRateDrafts] = useState<Record<number, string>>({});
 
-  const [amoConnection, setAmoConnection] = useState<AmoConnection>(null);
-  const [amoSummary, setAmoSummary] = useState<AmoSummary | null>(null);
-  const [amoLoadingSummary, setAmoLoadingSummary] = useState(false);
-  const [amoSubdomain, setAmoSubdomain] = useState("");
-  const [amoToken, setAmoToken] = useState("");
-  const [amoConnecting, setAmoConnecting] = useState(false);
-  const [amoError, setAmoError] = useState("");
+  const [amoConnections, setAmoConnections] = useState<AmoConnection[]>([]);
 
   async function load() {
     const res = await fetch(`/api/projects/${projectId}`);
@@ -90,51 +77,9 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
       setTargetologs(data.targetologs ?? []);
       setCanManageProjects(data.canManageProjects);
       setRateDrafts(Object.fromEntries(data.assignments.map((a: Assignment) => [a.id, a.payout_rate])));
-      setAmoConnection(data.amoConnection ?? null);
+      setAmoConnections(data.amoConnections ?? []);
     }
     setLoading(false);
-  }
-
-  async function loadAmoSummary() {
-    setAmoLoadingSummary(true);
-    setAmoError("");
-    const res = await fetch(`/api/amo/summary?projectId=${projectId}`);
-    if (res.ok) {
-      const data = await res.json();
-      setAmoSummary(data.summary);
-    } else {
-      const data = await res.json().catch(() => ({}));
-      setAmoError(data.error ?? "Не удалось загрузить данные из amoCRM");
-    }
-    setAmoLoadingSummary(false);
-  }
-
-  async function connectAmo(e: React.FormEvent) {
-    e.preventDefault();
-    setAmoConnecting(true);
-    setAmoError("");
-    const res = await fetch("/api/amo/connect", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projectId, subdomain: amoSubdomain, accessToken: amoToken }),
-    });
-    if (res.ok) {
-      setAmoSubdomain("");
-      setAmoToken("");
-      await load();
-      loadAmoSummary();
-    } else {
-      const data = await res.json().catch(() => ({}));
-      setAmoError(data.error ?? "Ошибка подключения");
-    }
-    setAmoConnecting(false);
-  }
-
-  async function disconnectAmo() {
-    if (!confirm("Отключить amoCRM от этого проекта?")) return;
-    await fetch(`/api/amo/connections/${projectId}`, { method: "DELETE" });
-    setAmoSummary(null);
-    load();
   }
 
   useEffect(() => {
@@ -142,12 +87,6 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch on connection change
-    if (amoConnection) loadAmoSummary();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [amoConnection?.subdomain]);
 
   useEffect(() => {
     if (!metaSetup) return;
@@ -274,7 +213,12 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
 
       {canManageProjects && (
         <section className="mt-6 rounded-xl border border-gray-200 bg-white shadow-sm p-5">
-          <h2 className="text-lg font-medium">Команда и выплаты</h2>
+          <h2 className="text-lg font-medium">
+            Команда и выплаты {assignments.length > 0 && `(${assignments.length})`}
+          </h2>
+          <p className="mt-1 text-xs text-gray-400">
+            На проект можно назначить сколько угодно сотрудников — у каждого своя ставка.
+          </p>
 
           {assignments.length === 0 ? (
             <p className="mt-3 text-sm text-gray-500">На проект пока никто не назначен.</p>
@@ -310,38 +254,57 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
             </div>
           )}
 
-          {targetologs.filter((t) => !assignments.some((a) => a.user_id === t.id)).length > 0 && (
-            <form onSubmit={addAssignment} className="mt-4 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-4">
-              <select
-                required
-                value={newUserId}
-                onChange={(e) => setNewUserId(e.target.value)}
-                className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
-              >
-                <option value="">Выберите сотрудника</option>
-                {targetologs
-                  .filter((t) => !assignments.some((a) => a.user_id === t.id))
-                  .map((t) => (
+          {(() => {
+            const available = targetologs.filter((t) => !assignments.some((a) => a.user_id === t.id));
+            if (targetologs.length === 0) {
+              return (
+                <p className="mt-4 border-t border-gray-100 pt-4 text-sm text-gray-500">
+                  В команде пока нет ни одного таргетолога.{" "}
+                  <a href="/team" className="underline">
+                    Добавьте сотрудников
+                  </a>
+                  , потом сможете назначить их сюда.
+                </p>
+              );
+            }
+            if (available.length === 0) {
+              return (
+                <p className="mt-4 border-t border-gray-100 pt-4 text-sm text-gray-500">
+                  Все сотрудники уже назначены на этот проект.
+                </p>
+              );
+            }
+            return (
+              <form onSubmit={addAssignment} className="mt-4 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-4">
+                <select
+                  required
+                  value={newUserId}
+                  onChange={(e) => setNewUserId(e.target.value)}
+                  className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+                >
+                  <option value="">Выберите сотрудника</option>
+                  {available.map((t) => (
                     <option key={t.id} value={t.id}>
                       {t.name} ({t.role_name})
                     </option>
                   ))}
-              </select>
-              <input
-                type="number"
-                required
-                min={0}
-                placeholder="Ставка, ₸/мес"
-                value={newRate}
-                onChange={(e) => setNewRate(e.target.value)}
-                className="w-36 rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
-              />
-              <button type="submit" className="rounded-lg bg-red-600 hover:bg-red-700 px-3 py-1.5 text-sm text-white">
-                Назначить
-              </button>
-              {assignError && <p className="w-full text-sm text-red-600">{assignError}</p>}
-            </form>
-          )}
+                </select>
+                <input
+                  type="number"
+                  required
+                  min={0}
+                  placeholder="Ставка, ₸/мес"
+                  value={newRate}
+                  onChange={(e) => setNewRate(e.target.value)}
+                  className="w-36 rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+                />
+                <button type="submit" className="rounded-lg bg-red-600 hover:bg-red-700 px-3 py-1.5 text-sm text-white">
+                  + Добавить в команду
+                </button>
+                {assignError && <p className="w-full text-sm text-red-600">{assignError}</p>}
+              </form>
+            );
+          })()}
         </section>
       )}
 
@@ -419,94 +382,7 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
         )}
       </section>
 
-      <section className="mt-6 rounded-xl border border-gray-200 bg-white shadow-sm p-5">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-medium">amoCRM</h2>
-          {amoConnection && (
-            <div className="flex gap-2">
-              <button
-                onClick={loadAmoSummary}
-                disabled={amoLoadingSummary}
-                className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm disabled:opacity-50"
-              >
-                {amoLoadingSummary ? "Обновление..." : "Обновить"}
-              </button>
-              <button
-                onClick={disconnectAmo}
-                className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-red-600"
-              >
-                Отключить
-              </button>
-            </div>
-          )}
-        </div>
-
-        {!amoConnection ? (
-          <form onSubmit={connectAmo} className="mt-3 flex flex-wrap gap-2">
-            <input
-              type="text"
-              required
-              placeholder="Поддомен (например clinic)"
-              value={amoSubdomain}
-              onChange={(e) => setAmoSubdomain(e.target.value)}
-              className="w-56 rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-            <input
-              type="password"
-              required
-              placeholder="Долгосрочный токен"
-              value={amoToken}
-              onChange={(e) => setAmoToken(e.target.value)}
-              className="flex-1 min-w-[220px] rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-            <button
-              type="submit"
-              disabled={amoConnecting}
-              className="rounded-lg bg-red-600 hover:bg-red-700 px-4 py-2 text-sm text-white disabled:opacity-50"
-            >
-              {amoConnecting ? "Подключение..." : "Подключить amoCRM"}
-            </button>
-            {amoError && <p className="w-full text-sm text-red-600">{amoError}</p>}
-            <p className="w-full text-xs text-gray-400">
-              Токен создаётся в amoCRM клиента: Настройки → Интеграции → Создать интеграцию →
-              Приватная → вкладка «Ключи и доступы» → Долгосрочный токен.
-            </p>
-          </form>
-        ) : (
-          <div className="mt-3">
-            <p className="text-sm text-gray-500">Подключено: {amoConnection.subdomain}.amocrm.ru</p>
-            {amoError && <p className="mt-2 text-sm text-red-600">{amoError}</p>}
-            {amoSummary && (
-              <>
-                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  <div className="rounded-lg border border-gray-100 p-3">
-                    <p className="text-xs text-gray-500">Заявок за 30 дней</p>
-                    <p className="text-xl font-semibold">{amoSummary.totalLeads}</p>
-                  </div>
-                  {amoSummary.byStage.map((s) => (
-                    <div key={s.name} className="rounded-lg border border-gray-100 p-3">
-                      <p className="text-xs text-gray-500">{s.name}</p>
-                      <p className="text-xl font-semibold">{s.count}</p>
-                    </div>
-                  ))}
-                </div>
-                {amoSummary.recentLeads.length > 0 && (
-                  <div className="mt-4 divide-y divide-gray-100 border-t border-gray-100">
-                    {amoSummary.recentLeads.map((l, i) => (
-                      <div key={i} className="flex items-center justify-between py-2 text-sm">
-                        <span>{l.name}</span>
-                        <span className="text-gray-500">
-                          {l.stageName} · {new Date(l.createdAt).toLocaleDateString("ru-RU")}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        )}
-      </section>
+      <AmoSection projectId={projectId} connections={amoConnections} onChange={load} />
 
       <section className="mt-6 rounded-xl border border-gray-200 bg-white shadow-sm p-5">
         <div className="flex items-center justify-between">

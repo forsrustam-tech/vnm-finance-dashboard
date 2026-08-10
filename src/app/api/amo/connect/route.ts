@@ -6,6 +6,7 @@ import { testAmoConnection } from "@/lib/amocrm";
 
 const schema = z.object({
   projectId: z.coerce.number(),
+  label: z.string().min(1),
   subdomain: z.string().min(1),
   accessToken: z.string().min(10),
 });
@@ -18,7 +19,7 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: "Некорректные данные" }, { status: 400 });
   }
-  const { projectId, subdomain, accessToken } = parsed.data;
+  const { projectId, label, subdomain, accessToken } = parsed.data;
 
   const canAccess =
     user.canManageProjects ||
@@ -40,10 +41,8 @@ export async function POST(req: NextRequest) {
   }
 
   await sql`
-    INSERT INTO amo_connections (project_id, subdomain, access_token, connected_by)
-    VALUES (${projectId}, ${cleanSubdomain}, ${accessToken}, ${user.id})
-    ON CONFLICT (project_id)
-    DO UPDATE SET subdomain = ${cleanSubdomain}, access_token = ${accessToken}, connected_by = ${user.id}, connected_at = now()
+    INSERT INTO amo_connections (project_id, label, subdomain, access_token, connected_by)
+    VALUES (${projectId}, ${label}, ${cleanSubdomain}, ${accessToken}, ${user.id})
   `;
 
   return NextResponse.json({ ok: true });

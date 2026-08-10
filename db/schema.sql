@@ -85,9 +85,11 @@ CREATE TABLE IF NOT EXISTS project_documents (
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- A project can have more than one amoCRM account (e.g. separate branches/cities).
 CREATE TABLE IF NOT EXISTS amo_connections (
   id             SERIAL PRIMARY KEY,
-  project_id     INTEGER NOT NULL UNIQUE REFERENCES projects(id) ON DELETE CASCADE,
+  project_id     INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  label          TEXT NOT NULL, -- e.g. "Астана", "Алматы"
   subdomain      TEXT NOT NULL,
   access_token   TEXT NOT NULL, -- long-lived token from a private integration in the client's amoCRM
   connected_by   INTEGER REFERENCES users(id),

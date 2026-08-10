@@ -94,8 +94,9 @@ export async function GET(
       `
     : [];
 
-  const amoRows = await sql`SELECT subdomain FROM amo_connections WHERE project_id = ${id}`;
-  const amoConnection = amoRows[0] ? { subdomain: amoRows[0].subdomain } : null;
+  const amoConnections = await sql`
+    SELECT id, label, subdomain FROM amo_connections WHERE project_id = ${id} ORDER BY created_at
+  `;
 
   return NextResponse.json({
     project,
@@ -103,7 +104,7 @@ export async function GET(
     connections: connections.map((c) => ({ ...c, summary: summaries[c.id] ?? null })),
     documents,
     targetologs,
-    amoConnection,
+    amoConnections,
     canManageProjects: user.canManageProjects,
   });
 }

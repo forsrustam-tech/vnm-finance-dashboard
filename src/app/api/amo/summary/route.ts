@@ -7,21 +7,23 @@ export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const projectId = req.nextUrl.searchParams.get("projectId");
-  if (!projectId) return NextResponse.json({ error: "projectId обязателен" }, { status: 400 });
+  const connectionId = req.nextUrl.searchParams.get("connectionId");
+  if (!connectionId) return NextResponse.json({ error: "connectionId обязателен" }, { status: 400 });
 
-  const canAccess =
-    user.canManageProjects ||
-    (await sql`SELECT 1 FROM project_assignments WHERE user_id = ${user.id} AND project_id = ${projectId}`)
-      .length > 0;
-  if (!canAccess) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const rows = await sql`SELECT subdomain, access_token FROM amo_connections WHERE project_id = ${projectId}`;
+  const rows = await sql`
+    SELECT project_id, subdomain, access_token FROM amo_connections WHERE id = ${connectionId}
+  `;
   const connection = rows[0];
   if (!connection) {
     return NextResponse.json({ error: "amoCRM не подключена" }, { status: 404 });
+  }
+
+  const canAccess =
+    user.canManageProjects ||
+    (await sql`SELECT 1 FROM project_assignments WHERE user_id = ${user.id} AND project_id = ${connection.project_id}`)
+      .length > 0;
+  if (!canAccess) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
