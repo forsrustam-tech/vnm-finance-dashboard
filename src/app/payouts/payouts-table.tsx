@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { recentPeriods, formatPeriodShort } from "@/lib/period";
+import { recentPeriods, formatPeriodShort, periodOf } from "@/lib/period";
 import FinanceAnalytics from "./finance-analytics";
+import ClientPaymentsTable from "./client-payments-table";
 
 type Assignment = {
   id: number;
@@ -10,6 +11,7 @@ type Assignment = {
   project_id: number;
   project_name: string;
   user_name: string;
+  created_at: string;
 };
 
 type Payout = {
@@ -18,7 +20,16 @@ type Payout = {
   status: string;
 };
 
-type Project = { id: number; name: string; status: string; revenue_amount: string };
+type Project = {
+  id: number;
+  name: string;
+  status: string;
+  revenue_amount: string;
+  payment_due_day: number | null;
+  created_at: string;
+};
+
+type ClientPayment = { project_id: number; period: string; status: string };
 
 const PERIODS = recentPeriods(6);
 const CURRENT_PERIOD = PERIODS[PERIODS.length - 1];
@@ -27,6 +38,7 @@ export default function PayoutsTable() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [payouts, setPayouts] = useState<Payout[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [clientPayments, setClientPayments] = useState<ClientPayment[]>([]);
   const [loading, setLoading] = useState(true);
 
   async function load() {
@@ -36,6 +48,7 @@ export default function PayoutsTable() {
       setAssignments(data.assignments);
       setPayouts(data.payouts);
       setProjects(data.projects ?? []);
+      setClientPayments(data.clientPayments ?? []);
     }
     setLoading(false);
   }
@@ -47,6 +60,14 @@ export default function PayoutsTable() {
 
   function statusFor(assignmentId: number, period: string) {
     return payouts.find((p) => p.project_assignment_id === assignmentId && p.period === period)?.status ?? "pending";
+  }
+
+  function existedAt(assignment: Assignment, period: string) {
+    return periodOf(assignment.created_at) <= period;
+  }
+
+  function applicablePeriods(assignment: Assignment) {
+    return PERIODS.filter((p) => existedAt(assignment, p));
   }
 
   async function toggle(assignment: Assignment, period: string) {
@@ -82,7 +103,7 @@ export default function PayoutsTable() {
   let paidAllShown = 0;
   let totalAllShown = 0;
   for (const a of assignments) {
-    for (const period of PERIODS) {
+    for (const period of applicablePeriods(a)) {
       totalAllShown += Number(a.payout_rate);
       if (statusFor(a.id, period) === "paid") paidAllShown += Number(a.payout_rate);
     }
@@ -98,6 +119,13 @@ export default function PayoutsTable() {
   return (
     <div>
       <FinanceAnalytics projects={projects} assignments={assignments} payouts={payouts} periods={PERIODS} />
+
+      <ClientPaymentsTable
+        projects={projects}
+        clientPayments={clientPayments}
+        periods={PERIODS}
+        onChange={load}
+      />
 
       <h2 className="text-lg font-medium">Статус выплат</h2>
       <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-3">
@@ -145,11 +173,21 @@ export default function PayoutsTable() {
                 <tbody>
                   {group.rows.map((a) => {
                     const rate = Number(a.payout_rate);
-                    const paidCount = PERIODS.filter((p) => statusFor(a.id, p) === "paid").length;
+                    const applicable = applicablePeriods(a);
+                    const paidCount = applicable.filter((p) => statusFor(a.id, p) === "paid").length;
                     return (
                       <tr key={a.id} className="border-b border-gray-50 last:border-0">
                         <td className="p-3">{a.user_name}</td>
                         {PERIODS.map((period) => {
+                          if (!existedAt(a, period)) {
+                            return (
+                              <td key={period} className="p-2 text-center">
+                                <span className="block w-full rounded-lg px-2 py-1.5 text-xs text-gray-300" title="Ещё не был назначен на проект">
+                                  —
+                                </span>
+                              </td>
+                            );
+                          }
                           const status = statusFor(a.id, period);
                           const isPaid = status === "paid";
                           return (
@@ -171,7 +209,7 @@ export default function PayoutsTable() {
                         <td className="p-3 text-right font-medium">
                           {(paidCount * rate).toLocaleString("ru-RU")} ₸
                           <span className="ml-1 text-xs text-gray-400">
-                            ({paidCount}/{PERIODS.length})
+                            ({paidCount}/{applicable.length})
                           </span>
                         </td>
                       </tr>
@@ -182,13 +220,14 @@ export default function PayoutsTable() {
                   <tr className="border-t border-gray-100 bg-gray-50">
                     <td className="p-3 text-xs text-gray-500">Итого по проекту / мес.</td>
                     {PERIODS.map((period) => {
-                      const monthTotal = group.rows.reduce((sum, a) => sum + Number(a.payout_rate), 0);
-                      const monthPaid = group.rows
+                      const rowsThatMonth = group.rows.filter((a) => existedAt(a, period));
+                      const monthTotal = rowsThatMonth.reduce((sum, a) => sum + Number(a.payout_rate), 0);
+                      const monthPaid = rowsThatMonth
                         .filter((a) => statusFor(a.id, period) === "paid")
                         .reduce((sum, a) => sum + Number(a.payout_rate), 0);
                       return (
                         <td key={period} className="p-2 text-center text-xs text-gray-500">
-                          {monthPaid.toLocaleString("ru-RU")}/{monthTotal.toLocaleString("ru-RU")}
+                          {rowsThatMonth.length === 0 ? "—" : `${monthPaid.toLocaleString("ru-RU")}/${monthTotal.toLocaleString("ru-RU")}`}
                         </td>
                       );
                     })}
@@ -202,7 +241,8 @@ export default function PayoutsTable() {
       )}
 
       <p className="mt-4 text-xs text-gray-400">
-        Нажмите на сумму в ячейке, чтобы отметить выплату за этот месяц как сделанную или отменить.
+        Нажмите на сумму в ячейке, чтобы отметить выплату за этот месяц как сделанную или отменить. Прочерк
+        «—» означает, что в этом месяце сотрудник ещё не был назначен на проект.
       </p>
     </div>
   );

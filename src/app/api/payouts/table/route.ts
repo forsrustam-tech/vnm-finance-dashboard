@@ -9,7 +9,7 @@ export async function GET() {
   }
 
   const assignments = await sql`
-    SELECT pa.id, pa.payout_rate, p.id AS project_id, p.name AS project_name, u.name AS user_name
+    SELECT pa.id, pa.payout_rate, pa.created_at, p.id AS project_id, p.name AS project_name, u.name AS user_name
     FROM project_assignments pa
     JOIN projects p ON p.id = pa.project_id
     JOIN users u ON u.id = pa.user_id
@@ -19,8 +19,10 @@ export async function GET() {
   const payouts = await sql`SELECT project_assignment_id, period, status FROM payouts`;
 
   const projects = await sql`
-    SELECT id, name, status, revenue_amount FROM projects ORDER BY name
+    SELECT id, name, status, revenue_amount, payment_due_day, created_at FROM projects ORDER BY name
   `;
 
-  return NextResponse.json({ assignments, payouts, projects });
+  const clientPayments = await sql`SELECT project_id, period, status FROM client_payments`;
+
+  return NextResponse.json({ assignments, payouts, projects, clientPayments });
 }

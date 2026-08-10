@@ -13,9 +13,9 @@ import {
   Cell,
   Legend,
 } from "recharts";
-import { formatPeriodShort } from "@/lib/period";
+import { formatPeriodShort, periodOf } from "@/lib/period";
 
-type Project = { id: number; name: string; status: string; revenue_amount: string };
+type Project = { id: number; name: string; status: string; revenue_amount: string; created_at: string };
 type Assignment = { id: number; payout_rate: string; project_id: number };
 type Payout = { project_assignment_id: number; period: string; status: string };
 
@@ -40,6 +40,9 @@ export default function FinanceAnalytics({
   const monthlyProfit = monthlyRevenue - monthlyPayroll;
 
   const chartData = periods.map((period) => {
+    const revenue = activeProjects
+      .filter((p) => periodOf(p.created_at) <= period)
+      .reduce((sum, p) => sum + Number(p.revenue_amount), 0);
     const paid = assignments
       .filter((a) =>
         payouts.some((p) => p.project_assignment_id === a.id && p.period === period && p.status === "paid")
@@ -47,7 +50,7 @@ export default function FinanceAnalytics({
       .reduce((sum, a) => sum + Number(a.payout_rate), 0);
     return {
       period: formatPeriodShort(period),
-      Доход: monthlyRevenue,
+      Доход: revenue,
       Расход: paid,
     };
   });
@@ -108,8 +111,8 @@ export default function FinanceAnalytics({
             </ResponsiveContainer>
           </div>
           <p className="mt-2 text-xs text-gray-400">
-            Доход показан по текущей ставке проектов (история изменений дохода не отслеживается).
-            Расход — фактически выплаченные суммы за месяц.
+            Доход учитывает только проекты, которые уже существовали в этом месяце (по текущей ставке —
+            история изменений суммы дохода не отслеживается). Расход — фактически выплаченные суммы за месяц.
           </p>
         </div>
 

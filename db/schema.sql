@@ -101,6 +101,19 @@ CREATE INDEX IF NOT EXISTS idx_documents_project_id ON project_documents(project
 CREATE INDEX IF NOT EXISTS idx_connections_project_id ON ad_account_connections(project_id);
 CREATE INDEX IF NOT EXISTS idx_snapshots_connection_id ON ad_spend_snapshots(connection_id);
 
+-- Tracks whether each client (project) has paid the agency for a given month.
+CREATE TABLE IF NOT EXISTS client_payments (
+  id            SERIAL PRIMARY KEY,
+  project_id    INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  period        TEXT NOT NULL, -- e.g. '2026-08'
+  amount        NUMERIC NOT NULL DEFAULT 0,
+  status        TEXT NOT NULL DEFAULT 'pending', -- pending | paid
+  paid_at       TIMESTAMPTZ,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (project_id, period)
+);
+
+CREATE INDEX IF NOT EXISTS idx_client_payments_project_id ON client_payments(project_id);
 CREATE INDEX IF NOT EXISTS idx_users_role_id ON users(role_id);
 CREATE INDEX IF NOT EXISTS idx_assignments_project_id ON project_assignments(project_id);
 CREATE INDEX IF NOT EXISTS idx_assignments_user_id ON project_assignments(user_id);

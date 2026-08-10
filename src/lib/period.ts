@@ -27,3 +27,9 @@ export function recentPeriods(count: number): string[] {
   }
   return periods;
 }
+
+// 'YYYY-MM' strings sort correctly as plain strings, so this is safe for comparisons.
+export function periodOf(date: string | Date): string {
+  const d = new Date(date);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
