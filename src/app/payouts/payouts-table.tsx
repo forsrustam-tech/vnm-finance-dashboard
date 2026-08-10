@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { recentPeriods, formatPeriodShort } from "@/lib/period";
+import FinanceAnalytics from "./finance-analytics";
 
 type Assignment = {
   id: number;
@@ -17,12 +18,15 @@ type Payout = {
   status: string;
 };
 
+type Project = { id: number; name: string; status: string; revenue_amount: string };
+
 const PERIODS = recentPeriods(6);
 const CURRENT_PERIOD = PERIODS[PERIODS.length - 1];
 
 export default function PayoutsTable() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [payouts, setPayouts] = useState<Payout[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
 
   async function load() {
@@ -31,6 +35,7 @@ export default function PayoutsTable() {
       const data = await res.json();
       setAssignments(data.assignments);
       setPayouts(data.payouts);
+      setProjects(data.projects ?? []);
     }
     setLoading(false);
   }
@@ -92,11 +97,10 @@ export default function PayoutsTable() {
 
   return (
     <div>
-      <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-5">
-          <p className="text-sm text-gray-500">Ежемесячный фонд выплат</p>
-          <p className="mt-1 text-2xl font-semibold">{monthlyFund.toLocaleString("ru-RU")} ₸</p>
-        </div>
+      <FinanceAnalytics projects={projects} assignments={assignments} payouts={payouts} periods={PERIODS} />
+
+      <h2 className="text-lg font-medium">Статус выплат</h2>
+      <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-3">
         <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-5">
           <p className="text-sm text-gray-500">Выплачено в этом месяце</p>
           <p className="mt-1 text-2xl font-semibold text-green-600">

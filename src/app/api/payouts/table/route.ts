@@ -18,5 +18,9 @@ export async function GET() {
 
   const payouts = await sql`SELECT project_assignment_id, period, status FROM payouts`;
 
-  return NextResponse.json({ assignments, payouts });
+  const projects = await sql`
+    SELECT id, name, status, revenue_amount FROM projects ORDER BY name
+  `;
+
+  return NextResponse.json({ assignments, payouts, projects });
 }

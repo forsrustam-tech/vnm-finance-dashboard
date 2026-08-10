@@ -26,10 +26,12 @@ export default function OwnerOverview({
   projects,
   assignments,
   period,
+  currentUserId,
 }: {
   projects: Project[];
   assignments: Assignment[];
   period: string;
+  currentUserId: number;
 }) {
   const [statuses, setStatuses] = useState<Record<number, string>>(
     Object.fromEntries(assignments.map((a) => [a.id, a.payout_status]))
@@ -42,6 +44,12 @@ export default function OwnerOverview({
   const activeAssignments = assignments.filter((a) => activeProjectIds.has(a.project_id));
   const totalPayouts = activeAssignments.reduce((sum, a) => sum + Number(a.payout_rate), 0);
   const totalPaid = activeAssignments
+    .filter((a) => statuses[a.id] === "paid")
+    .reduce((sum, a) => sum + Number(a.payout_rate), 0);
+
+  const myAssignments = assignments.filter((a) => a.user_id === currentUserId);
+  const myTotal = myAssignments.reduce((sum, a) => sum + Number(a.payout_rate), 0);
+  const myPaid = myAssignments
     .filter((a) => statuses[a.id] === "paid")
     .reduce((sum, a) => sum + Number(a.payout_rate), 0);
 
@@ -68,6 +76,28 @@ export default function OwnerOverview({
           Управлять проектами
         </Link>
       </div>
+
+      {myAssignments.length > 0 && (
+        <div className="mt-6 rounded-xl border border-red-200 bg-red-50/40 p-5">
+          <p className="text-sm font-medium text-gray-700">Моя зарплата с проектов</p>
+          <div className="mt-3 grid grid-cols-3 gap-4">
+            <div>
+              <p className="text-xs text-gray-500">Проектов</p>
+              <p className="mt-1 text-2xl font-semibold">{myAssignments.length}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Всего за месяц</p>
+              <p className="mt-1 text-2xl font-semibold">{myTotal.toLocaleString("ru-RU")} ₸</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Выплачено</p>
+              <p className="mt-1 text-2xl font-semibold text-green-600">
+                {myPaid.toLocaleString("ru-RU")} ₸
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-5">

@@ -43,7 +43,12 @@ export default async function DashboardPage() {
       <Nav user={user} />
       <main className="mx-auto max-w-5xl px-6 py-8">
         {user.canViewAllFinance ? (
-          <OwnerOverview projects={typedProjects} assignments={typedAssignments} period={period} />
+          <OwnerOverview
+            projects={typedProjects}
+            assignments={typedAssignments}
+            period={period}
+            currentUserId={user.id}
+          />
         ) : (
           <TargetologCabinet projects={typedProjects} assignments={typedAssignments} period={period} />
         )}

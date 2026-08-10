@@ -89,7 +89,6 @@ export async function GET(
         SELECT u.id, u.name, r.name AS role_name
         FROM users u
         JOIN roles r ON r.id = u.role_id
-        WHERE r.can_view_all_finance = false
         ORDER BY u.name
       `
     : [];

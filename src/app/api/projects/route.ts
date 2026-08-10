@@ -23,10 +23,9 @@ export async function GET() {
     JOIN users u ON u.id = pa.user_id
   `;
   const targetologs = await sql`
-    SELECT u.id, u.name
+    SELECT u.id, u.name, r.name AS role_name
     FROM users u
     JOIN roles r ON r.id = u.role_id
-    WHERE r.can_view_all_finance = false
     ORDER BY u.name
   `;
 
