@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import AmoSection, { type AmoConnection } from "./amo-section";
+import WhatsAppReportSection, { type WhatsAppReportGroup } from "./whatsapp-report-section";
 
 type Project = {
   id: number;
@@ -65,6 +66,7 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
   const [rateDrafts, setRateDrafts] = useState<Record<number, string>>({});
 
   const [amoConnections, setAmoConnections] = useState<AmoConnection[]>([]);
+  const [whatsappReportGroup, setWhatsappReportGroup] = useState<WhatsAppReportGroup>(null);
 
   async function load() {
     const res = await fetch(`/api/projects/${projectId}`);
@@ -78,6 +80,7 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
       setCanManageProjects(data.canManageProjects);
       setRateDrafts(Object.fromEntries(data.assignments.map((a: Assignment) => [a.id, a.payout_rate])));
       setAmoConnections(data.amoConnections ?? []);
+      setWhatsappReportGroup(data.whatsappReportGroup ?? null);
     }
     setLoading(false);
   }
@@ -383,6 +386,10 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
       </section>
 
       <AmoSection projectId={projectId} connections={amoConnections} onChange={load} />
+
+      {canManageProjects && (
+        <WhatsAppReportSection projectId={projectId} group={whatsappReportGroup} onChange={load} />
+      )}
 
       <section className="mt-6 rounded-xl border border-gray-200 bg-white shadow-sm p-5">
         <div className="flex items-center justify-between">

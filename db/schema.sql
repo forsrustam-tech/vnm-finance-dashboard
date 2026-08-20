@@ -131,3 +131,17 @@ ON CONFLICT (name) DO NOTHING;
 INSERT INTO roles (name, can_view_all_finance, can_manage_projects, can_manage_users, can_manage_roles, is_system)
 VALUES ('Таргетолог', false, false, false, false, false)
 ON CONFLICT (name) DO NOTHING;
+
+-- Maps a project to the WhatsApp group its daily amoCRM/ad-spend report is
+-- posted into. Owned/read by the separate whatsapp-report-bot process
+-- (~/whatsapp-report-bot), not by this Next.js app — kept here so the full
+-- schema is documented in one place.
+CREATE TABLE IF NOT EXISTS whatsapp_report_groups (
+  id           SERIAL PRIMARY KEY,
+  project_id   INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  group_jid    TEXT NOT NULL,          -- e.g. "1203630XXXXXXXXXX@g.us"
+  group_label  TEXT,
+  enabled      BOOLEAN NOT NULL DEFAULT true,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (project_id, group_jid)
+);

@@ -97,6 +97,10 @@ export async function GET(
     SELECT id, label, subdomain FROM amo_connections WHERE project_id = ${id} ORDER BY created_at
   `;
 
+  const whatsappReportGroups = await sql`
+    SELECT id, group_jid, group_label, enabled FROM whatsapp_report_groups WHERE project_id = ${id} LIMIT 1
+  `;
+
   return NextResponse.json({
     project,
     assignments,
@@ -104,6 +108,7 @@ export async function GET(
     documents,
     targetologs,
     amoConnections,
+    whatsappReportGroup: whatsappReportGroups[0] ?? null,
     canManageProjects: user.canManageProjects,
   });
 }
