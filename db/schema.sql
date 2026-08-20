@@ -132,6 +132,22 @@ INSERT INTO roles (name, can_view_all_finance, can_manage_projects, can_manage_u
 VALUES ('Таргетолог', false, false, false, false, false)
 ON CONFLICT (name) DO NOTHING;
 
+-- RNP (РНП): daily amoCRM snapshot per connection — the single source of truth
+-- that both the dashboard's per-project table and whatsapp-report-bot read
+-- from, instead of each calling amoCRM's API independently. Filled by the
+-- daily /api/cron/rnp-snapshot job. Mirrors ad_spend_snapshots in shape.
+CREATE TABLE IF NOT EXISTS amo_daily_snapshots (
+  id            SERIAL PRIMARY KEY,
+  connection_id INTEGER NOT NULL REFERENCES amo_connections(id) ON DELETE CASCADE,
+  date          DATE NOT NULL,
+  new_leads     INTEGER NOT NULL DEFAULT 0,
+  won_count     INTEGER NOT NULL DEFAULT 0,
+  won_revenue   NUMERIC NOT NULL DEFAULT 0,
+  by_stage      JSONB NOT NULL DEFAULT '[]',
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (connection_id, date)
+);
+
 -- Training library: YouTube links the team can watch (onboarding, playbooks, etc).
 CREATE TABLE IF NOT EXISTS training_videos (
   id            SERIAL PRIMARY KEY,

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import AmoSection, { type AmoConnection } from "./amo-section";
 import WhatsAppReportSection, { type WhatsAppReportGroup } from "./whatsapp-report-section";
+import RnpTable from "./rnp-table";
 
 type Project = {
   id: number;
@@ -384,6 +385,8 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
           </div>
         )}
       </section>
+
+      <RnpTable projectId={projectId} />
 
       <AmoSection projectId={projectId} connections={amoConnections} onChange={load} />
 
