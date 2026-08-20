@@ -23,16 +23,26 @@ type CurrencyNote = { currency: string; rate: number | null };
 const DATE_FMT = new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit" });
 const money = (n: number) => `${Math.round(n).toLocaleString("ru-RU")} ₸`;
 
+function toDateStr(d: Date) {
+  return d.toISOString().slice(0, 10);
+}
+function daysAgoStr(n: number) {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return toDateStr(d);
+}
+
 export default function RnpTable({ projectId }: { projectId: number }) {
   const [rows, setRows] = useState<RnpRow[] | null>(null);
   const [funnels, setFunnels] = useState<Funnel[]>([]);
   const [currencyNotes, setCurrencyNotes] = useState<CurrencyNote[]>([]);
   const [hasAmo, setHasAmo] = useState(true);
   const [hasAds, setHasAds] = useState(true);
-  const [days, setDays] = useState(14);
+  const [fromDate, setFromDate] = useState(() => daysAgoStr(13));
+  const [toDate, setToDate] = useState(() => toDateStr(new Date()));
 
-  async function load(d: number) {
-    const res = await fetch(`/api/projects/${projectId}/rnp?days=${d}`);
+  async function load(from: string, to: string) {
+    const res = await fetch(`/api/projects/${projectId}/rnp?from=${from}&to=${to}`);
     if (res.ok) {
       const data = await res.json();
       setRows(data.rows);
@@ -44,10 +54,21 @@ export default function RnpTable({ projectId }: { projectId: number }) {
   }
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch on mount and when the day range changes
-    load(days);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch on mount and when the range changes
+    load(fromDate, toDate);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [days]);
+  }, [fromDate, toDate]);
+
+  function applyPreset(days: number) {
+    setFromDate(daysAgoStr(days - 1));
+    setToDate(toDateStr(new Date()));
+  }
+
+  function applyThisMonth() {
+    const now = new Date();
+    setFromDate(toDateStr(new Date(now.getFullYear(), now.getMonth(), 1)));
+    setToDate(toDateStr(now));
+  }
 
   if (!rows) return null;
 
@@ -76,18 +97,48 @@ export default function RnpTable({ projectId }: { projectId: number }) {
 
   return (
     <section className="mt-6 rounded-xl border border-gray-200 bg-white shadow-sm p-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-medium">РНП</h2>
+        <a
+          href={`/api/projects/${projectId}/rnp/export?from=${fromDate}&to=${toDate}`}
+          className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+        >
+          Скачать отчёт (.xlsx)
+        </a>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
         <div className="flex gap-1 text-xs">
           {[7, 14, 30].map((d) => (
             <button
               key={d}
-              onClick={() => setDays(d)}
-              className={`rounded-md px-2 py-1 ${days === d ? "bg-red-600 text-white" : "text-gray-500 hover:bg-gray-100"}`}
+              onClick={() => applyPreset(d)}
+              className="rounded-md px-2 py-1 text-gray-500 hover:bg-gray-100"
             >
               {d} дней
             </button>
           ))}
+          <button onClick={applyThisMonth} className="rounded-md px-2 py-1 text-gray-500 hover:bg-gray-100">
+            Этот месяц
+          </button>
+        </div>
+        <div className="flex items-center gap-1.5 text-xs text-gray-500">
+          <input
+            type="date"
+            value={fromDate}
+            max={toDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            className="rounded-md border border-gray-200 px-2 py-1"
+          />
+          <span>—</span>
+          <input
+            type="date"
+            value={toDate}
+            min={fromDate}
+            max={toDateStr(new Date())}
+            onChange={(e) => setToDate(e.target.value)}
+            className="rounded-md border border-gray-200 px-2 py-1"
+          />
         </div>
       </div>
       <p className="mt-1 text-xs text-gray-400">
