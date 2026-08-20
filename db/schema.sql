@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS ad_account_connections (
   platform       TEXT NOT NULL DEFAULT 'meta',
   ad_account_id  TEXT,
   access_token   TEXT,
+  currency       TEXT, -- account's billing currency from Meta (e.g. 'USD'), converted to ₸ for display
   connected_by   INTEGER REFERENCES users(id),
   connected_at   TIMESTAMPTZ,
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -69,6 +70,7 @@ CREATE TABLE IF NOT EXISTS ad_spend_snapshots (
   spend        NUMERIC NOT NULL DEFAULT 0,
   impressions  BIGINT NOT NULL DEFAULT 0,
   clicks       BIGINT NOT NULL DEFAULT 0,
+  link_clicks  BIGINT NOT NULL DEFAULT 0, -- outbound clicks to the landing page, used for site conversion (leads / link_clicks)
   leads        BIGINT NOT NULL DEFAULT 0,
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (connection_id, date)
@@ -137,14 +139,15 @@ ON CONFLICT (name) DO NOTHING;
 -- from, instead of each calling amoCRM's API independently. Filled by the
 -- daily /api/cron/rnp-snapshot job. Mirrors ad_spend_snapshots in shape.
 CREATE TABLE IF NOT EXISTS amo_daily_snapshots (
-  id            SERIAL PRIMARY KEY,
-  connection_id INTEGER NOT NULL REFERENCES amo_connections(id) ON DELETE CASCADE,
-  date          DATE NOT NULL,
-  new_leads     INTEGER NOT NULL DEFAULT 0,
-  won_count     INTEGER NOT NULL DEFAULT 0,
-  won_revenue   NUMERIC NOT NULL DEFAULT 0,
-  by_stage      JSONB NOT NULL DEFAULT '[]',
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  id               SERIAL PRIMARY KEY,
+  connection_id    INTEGER NOT NULL REFERENCES amo_connections(id) ON DELETE CASCADE,
+  date             DATE NOT NULL,
+  new_leads        INTEGER NOT NULL DEFAULT 0,
+  total_lead_value NUMERIC NOT NULL DEFAULT 0, -- sum of price on leads created this day (pipeline value entering, not yet won)
+  won_count        INTEGER NOT NULL DEFAULT 0,
+  won_revenue      NUMERIC NOT NULL DEFAULT 0,
+  by_stage         JSONB NOT NULL DEFAULT '[]',
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (connection_id, date)
 );
 

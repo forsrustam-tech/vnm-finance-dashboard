@@ -23,11 +23,11 @@ export async function GET(req: NextRequest) {
     try {
       const snap = await fetchDailyAmoSnapshot(conn.subdomain, conn.access_token, fromMs, toMs);
       await sql`
-        INSERT INTO amo_daily_snapshots (connection_id, date, new_leads, won_count, won_revenue, by_stage)
-        VALUES (${conn.id}, ${dateStr}, ${snap.newLeads}, ${snap.wonCount}, ${snap.wonRevenue}, ${JSON.stringify(snap.byStage)})
+        INSERT INTO amo_daily_snapshots (connection_id, date, new_leads, total_lead_value, won_count, won_revenue, by_stage)
+        VALUES (${conn.id}, ${dateStr}, ${snap.newLeads}, ${snap.totalLeadValue}, ${snap.wonCount}, ${snap.wonRevenue}, ${JSON.stringify(snap.byStage)})
         ON CONFLICT (connection_id, date)
-        DO UPDATE SET new_leads = ${snap.newLeads}, won_count = ${snap.wonCount},
-                       won_revenue = ${snap.wonRevenue}, by_stage = ${JSON.stringify(snap.byStage)}
+        DO UPDATE SET new_leads = ${snap.newLeads}, total_lead_value = ${snap.totalLeadValue},
+                       won_count = ${snap.wonCount}, won_revenue = ${snap.wonRevenue}, by_stage = ${JSON.stringify(snap.byStage)}
       `;
       amoResults.push({ connectionId: conn.id, ok: true });
     } catch (err) {
@@ -43,10 +43,11 @@ export async function GET(req: NextRequest) {
       const daily = await fetchDailyInsights(conn.ad_account_id, conn.access_token, 2);
       for (const day of daily) {
         await sql`
-          INSERT INTO ad_spend_snapshots (connection_id, date, spend, impressions, clicks, leads)
-          VALUES (${conn.id}, ${day.date}, ${day.spend}, ${day.impressions}, ${day.clicks}, ${day.leads})
+          INSERT INTO ad_spend_snapshots (connection_id, date, spend, impressions, clicks, link_clicks, leads)
+          VALUES (${conn.id}, ${day.date}, ${day.spend}, ${day.impressions}, ${day.clicks}, ${day.linkClicks}, ${day.leads})
           ON CONFLICT (connection_id, date)
-          DO UPDATE SET spend = ${day.spend}, impressions = ${day.impressions}, clicks = ${day.clicks}, leads = ${day.leads}
+          DO UPDATE SET spend = ${day.spend}, impressions = ${day.impressions}, clicks = ${day.clicks},
+                         link_clicks = ${day.linkClicks}, leads = ${day.leads}
         `;
       }
       adResults.push({ connectionId: conn.id, ok: true });

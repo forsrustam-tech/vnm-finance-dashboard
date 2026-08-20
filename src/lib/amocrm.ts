@@ -67,6 +67,7 @@ const WON_STATUS_ID = 142;
 
 export type DailyAmoSnapshot = {
   newLeads: number;
+  totalLeadValue: number;
   byStage: { name: string; count: number }[];
   wonCount: number;
   wonRevenue: number;
@@ -110,15 +111,17 @@ export async function fetchDailyAmoSnapshot(
   if (!closedRes.ok) throw new Error(`amoCRM won-revenue fetch failed: ${closedRes.status}`);
 
   const createdData = await createdRes.json();
-  const createdLeads: { status_id: number }[] = createdData._embedded?.leads ?? [];
+  const createdLeads: { status_id: number; price: number }[] = createdData._embedded?.leads ?? [];
 
   const closedData = await closedRes.json();
   const closedLeads: { status_id: number; price: number }[] = closedData._embedded?.leads ?? [];
 
   const stageCounts = new Map<string, number>();
+  let totalLeadValue = 0;
   for (const lead of createdLeads) {
     const name = stageNames.get(lead.status_id) ?? "Неизвестный этап";
     stageCounts.set(name, (stageCounts.get(name) ?? 0) + 1);
+    totalLeadValue += Number(lead.price) || 0;
   }
 
   let wonCount = 0;
@@ -132,6 +135,7 @@ export async function fetchDailyAmoSnapshot(
 
   return {
     newLeads: createdLeads.length,
+    totalLeadValue,
     byStage: [...stageCounts.entries()].map(([name, count]) => ({ name, count })),
     wonCount,
     wonRevenue,

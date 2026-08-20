@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
   let payload;
   try {
     const { payload: p } = await jwtVerify(parsed.data.setupToken, getSecret());
-    payload = p as { projectId: number; accessToken: string; accounts: { id: string; name: string }[] };
+    payload = p as { projectId: number; accessToken: string; accounts: { id: string; name: string; currency?: string }[] };
   } catch {
     return NextResponse.json({ error: "Ссылка для подключения истекла, попробуйте снова" }, { status: 400 });
   }
@@ -36,8 +36,8 @@ export async function POST(req: NextRequest) {
   }
 
   await sql`
-    INSERT INTO ad_account_connections (project_id, platform, ad_account_id, access_token, connected_by, connected_at)
-    VALUES (${payload.projectId}, 'meta', ${account.id}, ${payload.accessToken}, ${user.id}, now())
+    INSERT INTO ad_account_connections (project_id, platform, ad_account_id, access_token, currency, connected_by, connected_at)
+    VALUES (${payload.projectId}, 'meta', ${account.id}, ${payload.accessToken}, ${account.currency ?? null}, ${user.id}, now())
   `;
 
   return NextResponse.json({ ok: true });

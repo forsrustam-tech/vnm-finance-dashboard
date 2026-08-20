@@ -82,6 +82,7 @@ export type DailyInsight = {
   spend: number;
   impressions: number;
   clicks: number;
+  linkClicks: number;
   leads: number;
 };
 
@@ -95,7 +96,7 @@ export async function fetchDailyInsights(
     level: "account",
     time_increment: "1",
     date_preset: daysBack <= 7 ? "last_7d" : daysBack <= 30 ? "last_30d" : "last_90d",
-    fields: "spend,impressions,clicks,actions",
+    fields: "spend,impressions,clicks,inline_link_clicks,actions",
   });
   const res = await fetch(`${GRAPH_BASE}/${adAccountId}/insights?${params.toString()}`);
   if (!res.ok) throw new Error(`Meta insights fetch failed: ${await res.text()}`);
@@ -109,6 +110,9 @@ export async function fetchDailyInsights(
       spend: Number(row.spend ?? 0),
       impressions: Number(row.impressions ?? 0),
       clicks: Number(row.clicks ?? 0),
+      // Outbound clicks to the landing page — used for site conversion (leads / linkClicks),
+      // distinct from `clicks` which includes clicks on the ad itself (likes, expand, etc).
+      linkClicks: Number(row.inline_link_clicks ?? 0),
       leads: leadAction ? Number(leadAction.value) : 0,
     };
   });
