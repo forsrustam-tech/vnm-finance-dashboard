@@ -132,6 +132,19 @@ INSERT INTO roles (name, can_view_all_finance, can_manage_projects, can_manage_u
 VALUES ('Таргетолог', false, false, false, false, false)
 ON CONFLICT (name) DO NOTHING;
 
+-- Training library: YouTube links the team can watch (onboarding, playbooks, etc).
+CREATE TABLE IF NOT EXISTS training_videos (
+  id            SERIAL PRIMARY KEY,
+  title         TEXT NOT NULL,
+  youtube_url   TEXT NOT NULL,
+  youtube_id    TEXT NOT NULL,
+  thumbnail_url TEXT,
+  description   TEXT,
+  category      TEXT,
+  added_by      INTEGER REFERENCES users(id),
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- Maps a project to the WhatsApp group its daily amoCRM/ad-spend report is
 -- posted into. Owned/read by the separate whatsapp-report-bot process
 -- (~/whatsapp-report-bot), not by this Next.js app — kept here so the full

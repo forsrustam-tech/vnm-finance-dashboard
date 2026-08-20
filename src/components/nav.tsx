@@ -21,6 +21,9 @@ export default function Nav({ user }: { user: CurrentUser }) {
               Выплаты
             </Link>
           )}
+          <Link href="/training" className="font-medium text-gray-600 hover:text-red-600">
+            Обучение
+          </Link>
           {user.canManageUsers && (
             <Link href="/team" className="font-medium text-gray-600 hover:text-red-600">
               Команда
