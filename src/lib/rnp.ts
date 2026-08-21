@@ -18,14 +18,95 @@ export type RnpRow = {
 
 export type RnpFunnel = { connectionId: number; label: string; stages: { name: string; count: number }[] };
 export type RnpCurrencyNote = { currency: string; rate: number | null };
+export type RnpPlatform = { platform: string; adSpendKzt: number; impressions: number; clicks: number; adLeads: number };
 
 export type RnpData = {
   rows: RnpRow[];
+  platforms: RnpPlatform[];
   funnels: RnpFunnel[];
   currencyNotes: RnpCurrencyNote[];
   hasAmoConnections: boolean;
   hasAdConnections: boolean;
 };
+
+export type WeekBlock = {
+  weekStart: string; // Monday, 'YYYY-MM-DD'
+  weekEnd: string; // Sunday, or range end if the range is shorter
+  adSpendKzt: number;
+  amoNewLeads: number;
+  amoWonRevenue: number;
+  budgetPlan: number | null;
+  leadsPlan: number | null;
+};
+
+// Groups daily rows into Monday–Sunday week blocks and, if a monthly plan
+// exists for a week's month, prorates that month's plan by the fraction of
+// the month's days that fall in this week (a week can straddle two months).
+export function groupIntoWeeks(
+  rows: RnpRow[],
+  targetsByPeriod: Map<string, { budgetPlan: number; leadsPlan: number }>
+): WeekBlock[] {
+  if (rows.length === 0) return [];
+
+  const byWeekStart = new Map<string, RnpRow[]>();
+  for (const row of rows) {
+    const d = new Date(`${row.date}T00:00:00Z`);
+    const dow = d.getUTCDay(); // 0 Sun..6 Sat
+    const daysSinceMonday = (dow + 6) % 7;
+    const monday = new Date(d);
+    monday.setUTCDate(d.getUTCDate() - daysSinceMonday);
+    const key = monday.toISOString().slice(0, 10);
+    const list = byWeekStart.get(key) ?? [];
+    list.push(row);
+    byWeekStart.set(key, list);
+  }
+
+  const daysInMonth = (period: string) => {
+    const [y, m] = period.split("-").map(Number);
+    return new Date(Date.UTC(y, m, 0)).getUTCDate();
+  };
+
+  return [...byWeekStart.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([weekStart, weekRows]) => {
+      const sorted = [...weekRows].sort((a, b) => a.date.localeCompare(b.date));
+      const weekEnd = sorted[sorted.length - 1].date;
+
+      // Prorate plan per day by that day's month, then sum — handles a week
+      // that spans two calendar months without double counting either plan.
+      let budgetPlan = 0;
+      let leadsPlan = 0;
+      let anyPlan = false;
+      for (const row of sorted) {
+        const period = row.date.slice(0, 7);
+        const target = targetsByPeriod.get(period);
+        if (!target) continue;
+        anyPlan = true;
+        const dim = daysInMonth(period);
+        budgetPlan += target.budgetPlan / dim;
+        leadsPlan += target.leadsPlan / dim;
+      }
+
+      return {
+        weekStart,
+        weekEnd,
+        adSpendKzt: sorted.reduce((s, r) => s + r.adSpendKzt, 0),
+        amoNewLeads: sorted.reduce((s, r) => s + r.amoNewLeads, 0),
+        amoWonRevenue: sorted.reduce((s, r) => s + r.amoWonRevenue, 0),
+        budgetPlan: anyPlan ? budgetPlan : null,
+        leadsPlan: anyPlan ? Math.round(leadsPlan) : null,
+      };
+    });
+}
+
+export async function getMonthlyTargets(projectId: string, periods: string[]) {
+  if (periods.length === 0) return new Map<string, { budgetPlan: number; leadsPlan: number }>();
+  const rows = await sql`
+    SELECT period, budget_plan, leads_plan FROM project_monthly_targets
+    WHERE project_id = ${projectId} AND period = ANY(${periods})
+  `;
+  return new Map(rows.map((r) => [r.period, { budgetPlan: Number(r.budget_plan), leadsPlan: Number(r.leads_plan) }]));
+}
 
 // Inclusive list of 'YYYY-MM-DD' strings between fromDate and toDate.
 function dateRange(fromDate: string, toDate: string): string[] {
@@ -43,7 +124,7 @@ export async function getRnpData(projectId: string, fromDate: string, toDate: st
   const dates = dateRange(fromDate, toDate);
 
   const adConnections = await sql`
-    SELECT id, ad_account_id, currency FROM ad_account_connections WHERE project_id = ${projectId}
+    SELECT id, ad_account_id, currency, platform FROM ad_account_connections WHERE project_id = ${projectId}
   `;
   const rateByCurrency = new Map<string, number | null>();
   for (const conn of adConnections) {
@@ -65,6 +146,8 @@ export async function getRnpData(projectId: string, fromDate: string, toDate: st
     WHERE c.project_id = ${projectId} AND s.date >= ${fromDate} AND s.date <= ${toDate}
   `;
   const currencyByConnection = new Map(adConnections.map((c) => [c.id, c.currency ?? "KZT"]));
+  const platformByConnection = new Map(adConnections.map((c) => [c.id, c.platform ?? "meta"]));
+  const byPlatform = new Map<string, RnpPlatform>();
 
   const byDate = new Map<string, Omit<RnpRow, "date">>();
   for (const date of dates) {
@@ -93,24 +176,36 @@ export async function getRnpData(projectId: string, fromDate: string, toDate: st
     entry.amoWonRevenue += Number(row.won_revenue);
   }
   for (const row of adRows) {
-    const entry = byDate.get(dateKey(row.date));
-    if (!entry) continue;
     const currency = currencyByConnection.get(row.connection_id) ?? "KZT";
     const rate = rateByCurrency.get(currency);
     const spend = Number(row.spend);
-    if (rate) {
-      entry.adSpendKzt += spend * rate;
-    } else {
-      entry.adSpendUnconverted += spend;
-      entry.hasUnconvertedSpend = true;
+    const spendKzt = rate ? spend * rate : 0;
+    const platform = platformByConnection.get(row.connection_id) ?? "meta";
+
+    const entry = byDate.get(dateKey(row.date));
+    if (entry) {
+      if (rate) {
+        entry.adSpendKzt += spendKzt;
+      } else {
+        entry.adSpendUnconverted += spend;
+        entry.hasUnconvertedSpend = true;
+      }
+      entry.impressions += Number(row.impressions);
+      entry.clicks += Number(row.clicks);
+      entry.linkClicks += Number(row.link_clicks);
+      entry.adLeads += Number(row.leads);
     }
-    entry.impressions += Number(row.impressions);
-    entry.clicks += Number(row.clicks);
-    entry.linkClicks += Number(row.link_clicks);
-    entry.adLeads += Number(row.leads);
+
+    const platEntry = byPlatform.get(platform) ?? { platform, adSpendKzt: 0, impressions: 0, clicks: 0, adLeads: 0 };
+    platEntry.adSpendKzt += spendKzt;
+    platEntry.impressions += Number(row.impressions);
+    platEntry.clicks += Number(row.clicks);
+    platEntry.adLeads += Number(row.leads);
+    byPlatform.set(platform, platEntry);
   }
 
   const rows = dates.map((date) => ({ date, ...byDate.get(date)! }));
+  const platforms = [...byPlatform.values()].sort((a, b) => b.adSpendKzt - a.adSpendKzt);
 
   const amoConnections = await sql`
     SELECT id, label FROM amo_connections WHERE project_id = ${projectId} ORDER BY label
@@ -144,6 +239,7 @@ export async function getRnpData(projectId: string, fromDate: string, toDate: st
 
   return {
     rows,
+    platforms,
     funnels,
     currencyNotes,
     hasAmoConnections: amoConnections.length > 0,

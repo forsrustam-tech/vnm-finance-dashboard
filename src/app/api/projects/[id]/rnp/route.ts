@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { recentDateStrs } from "@/lib/period";
-import { getRnpData } from "@/lib/rnp";
+import { getRnpData, getMonthlyTargets, groupIntoWeeks } from "@/lib/rnp";
 
 async function canAccessProject(user: { id: number; canManageProjects: boolean }, projectId: string) {
   if (user.canManageProjects) return true;
@@ -39,5 +39,19 @@ export async function GET(
   }
 
   const data = await getRnpData(id, fromDate, toDate);
-  return NextResponse.json(data);
+
+  const periods = [...new Set(data.rows.map((r) => r.date.slice(0, 7)))];
+  const targetsByPeriod = await getMonthlyTargets(id, periods);
+  const weekBlocks = groupIntoWeeks(data.rows, targetsByPeriod);
+
+  const totalSpend = data.rows.reduce((s, r) => s + r.adSpendKzt, 0);
+  const totalRevenue = data.rows.reduce((s, r) => s + r.amoWonRevenue, 0);
+  const romi = totalSpend > 0 ? ((totalRevenue - totalSpend) / totalSpend) * 100 : null;
+
+  return NextResponse.json({
+    ...data,
+    weekBlocks,
+    targets: [...targetsByPeriod.entries()].map(([period, t]) => ({ period, ...t })),
+    romi,
+  });
 }

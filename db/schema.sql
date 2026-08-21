@@ -151,6 +151,29 @@ CREATE TABLE IF NOT EXISTS amo_daily_snapshots (
   UNIQUE (connection_id, date)
 );
 
+-- One editable plan per project per calendar month — prorated across weeks
+-- in the РНП UI (weekly plan = monthly plan * days-in-week / days-in-month).
+CREATE TABLE IF NOT EXISTS project_monthly_targets (
+  id           SERIAL PRIMARY KEY,
+  project_id   INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  period       TEXT NOT NULL, -- 'YYYY-MM'
+  budget_plan  NUMERIC NOT NULL DEFAULT 0, -- ₸
+  leads_plan   INTEGER NOT NULL DEFAULT 0,
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (project_id, period)
+);
+
+-- "Решения" — a short weekly decisions/notes log per project, shown next to
+-- that week's numbers in the РНП table.
+CREATE TABLE IF NOT EXISTS project_notes (
+  id           SERIAL PRIMARY KEY,
+  project_id   INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  week_start   DATE NOT NULL, -- Monday of the week this note is about
+  note         TEXT NOT NULL,
+  created_by   INTEGER REFERENCES users(id),
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- Training library: YouTube links the team can watch (onboarding, playbooks, etc).
 CREATE TABLE IF NOT EXISTS training_videos (
   id            SERIAL PRIMARY KEY,
