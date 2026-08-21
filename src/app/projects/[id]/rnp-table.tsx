@@ -24,7 +24,13 @@ type WeekBlock = {
   weekStart: string;
   weekEnd: string;
   adSpendKzt: number;
+  impressions: number;
+  clicks: number;
+  linkClicks: number;
+  adLeads: number;
   amoNewLeads: number;
+  amoLeadValue: number;
+  amoWonCount: number;
   amoWonRevenue: number;
   budgetPlan: number | null;
   leadsPlan: number | null;
@@ -254,17 +260,8 @@ export default function RnpTable({ projectId }: { projectId: number }) {
         )}
       </div>
 
-      <h3 className="mt-5 text-xs font-semibold uppercase tracking-wide text-gray-400">Реклама</h3>
-      <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-5">
-        <Stat label="Расход" value={money(t.adSpendKzt)} />
-        <Stat label="Показы" value={t.impressions.toLocaleString("ru-RU")} />
-        <Stat label="Клики" value={t.clicks.toLocaleString("ru-RU")} />
-        <Stat label="CTR" value={ctr !== null ? `${ctr.toFixed(2)}%` : "—"} />
-        <Stat label="CPM" value={cpm !== null ? money(cpm) : "—"} />
-      </div>
-
       {platforms.length > 1 && (
-        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
           {platforms.map((p) => {
             const pCpl = p.adLeads > 0 ? p.adSpendKzt / p.adLeads : null;
             const pCtr = p.impressions > 0 ? (p.clicks / p.impressions) * 100 : null;
@@ -283,81 +280,126 @@ export default function RnpTable({ projectId }: { projectId: number }) {
         </div>
       )}
 
-      <h3 className="mt-4 text-xs font-semibold uppercase tracking-wide text-gray-400">Заявки и воронка</h3>
-      <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-5">
-        <Stat label="Лидов с рекламы" value={String(t.adLeads)} />
-        <Stat label="Цена лида" value={cpl !== null ? money(cpl) : "—"} />
-        <Stat label="Конверсия сайта" value={siteConversion !== null ? `${siteConversion.toFixed(1)}%` : "—"} hint="лиды / переходы по ссылке" />
-        <Stat label="Новых лидов (amo)" value={String(t.amoNewLeads)} />
-        <Stat label="Сумма в воронке" value={money(t.amoLeadValue)} hint="цена карточек новых лидов" />
-      </div>
-      <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-5">
-        <Stat label="Закрыто сделок" value={String(t.amoWonCount)} />
-        <Stat label="Конверсия в продажу" value={closeRate !== null ? `${closeRate.toFixed(1)}%` : "—"} />
-        <Stat label="Выручка (закрытые)" value={money(t.amoWonRevenue)} />
-        <Stat label="Средний чек" value={avgDeal !== null ? money(avgDeal) : "—"} />
-        <Stat label="ROMI" value={romi !== null ? `${romi.toFixed(0)}%` : "—"} hint="(выручка − расход) / расход" />
-      </div>
-
-      {/* Weekly plan/fact table */}
-      {weekBlocks.length > 0 && (
-        <div className="mt-6">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">По неделям — план / факт</h3>
-          <div className="mt-2 flex flex-col gap-3">
-            {weekBlocks.map((w) => {
-              const budgetPct = w.budgetPlan && w.budgetPlan > 0 ? (w.adSpendKzt / w.budgetPlan) * 100 : null;
-              const leadsPct = w.leadsPlan && w.leadsPlan > 0 ? (w.amoNewLeads / w.leadsPlan) * 100 : null;
-              const weekNotes = notes.filter((n) => n.week_start === w.weekStart);
-              return (
-                <div key={w.weekStart} className="rounded-lg border border-gray-200 p-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-sm font-medium">
-                      {DATE_FMT.format(new Date(w.weekStart))} — {DATE_FMT.format(new Date(w.weekEnd))}
-                    </p>
-                    <p className="text-sm text-gray-500">Выручка: <b className="text-gray-800">{money(w.amoWonRevenue)}</b></p>
-                  </div>
-                  <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <PlanFactBar label="Бюджет" plan={w.budgetPlan} fact={w.adSpendKzt} pct={budgetPct} fmt={money} />
-                    <PlanFactBar label="Лиды" plan={w.leadsPlan} fact={w.amoNewLeads} pct={leadsPct} fmt={(n) => String(Math.round(n))} />
-                  </div>
-
-                  <div className="mt-3 border-t border-gray-100 pt-2">
-                    <p className="text-xs font-medium text-gray-500">Решения</p>
-                    {weekNotes.length > 0 && (
-                      <ul className="mt-1 flex flex-col gap-1">
-                        {weekNotes.map((n) => (
-                          <li key={n.id} className="text-xs text-gray-600">
-                            <span className="text-gray-400">{n.created_by_name ?? "—"}:</span> {n.note}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
+      {/* Metrics-by-week matrix — metric labels down the left, one column per
+          week (plus a totals column), same shape as the reference sheet. */}
+      <div className="mt-6 overflow-x-auto">
+        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">По неделям</h3>
+        <table className="w-full min-w-[640px] border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-gray-100 bg-gray-50 text-xs text-gray-500">
+              <th className="sticky left-0 bg-gray-50 p-2 text-left font-medium">Метрика</th>
+              <th className="min-w-[110px] p-2 text-right font-medium">Итого</th>
+              {weekBlocks.map((w) => (
+                <th key={w.weekStart} className="min-w-[100px] p-2 text-right font-medium">
+                  {DATE_FMT.format(new Date(w.weekStart))}–{DATE_FMT.format(new Date(w.weekEnd))}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <MetricRow label="Бюджет, план ₸" total={targets.find((tg) => tg.period === currentPeriod())?.budgetPlan ?? null} cells={weekBlocks.map((w) => w.budgetPlan)} fmt={money} />
+            <MetricRow label="Бюджет, факт ₸" total={t.adSpendKzt} cells={weekBlocks.map((w) => w.adSpendKzt)} fmt={money} highlight />
+            <MetricRow
+              label="% выполнения (бюджет)"
+              total={sumOrNull(weekBlocks.map((w) => w.budgetPlan)) ? (t.adSpendKzt / sumOrNull(weekBlocks.map((w) => w.budgetPlan))!) * 100 : null}
+              cells={weekBlocks.map((w) => (w.budgetPlan && w.budgetPlan > 0 ? (w.adSpendKzt / w.budgetPlan) * 100 : null))}
+              fmt={(n) => `${n.toFixed(0)}%`}
+              muted
+            />
+            <MetricRow label="Показы" total={t.impressions} cells={weekBlocks.map((w) => w.impressions)} fmt={(n) => n.toLocaleString("ru-RU")} muted />
+            <MetricRow label="Клики" total={t.clicks} cells={weekBlocks.map((w) => w.clicks)} fmt={(n) => n.toLocaleString("ru-RU")} muted />
+            <MetricRow
+              label="CTR, %"
+              total={ctr}
+              cells={weekBlocks.map((w) => (w.impressions > 0 ? (w.clicks / w.impressions) * 100 : null))}
+              fmt={(n) => `${n.toFixed(2)}%`}
+              muted
+            />
+            <MetricRow label="CPM, ₸" total={cpm} cells={weekBlocks.map((w) => (w.impressions > 0 ? (w.adSpendKzt / w.impressions) * 1000 : null))} fmt={money} muted />
+            <MetricRow label="Лидов с рекламы" total={t.adLeads} cells={weekBlocks.map((w) => w.adLeads)} fmt={(n) => String(n)} />
+            <MetricRow
+              label="Цена лида, ₸"
+              total={cpl}
+              cells={weekBlocks.map((w) => (w.adLeads > 0 ? w.adSpendKzt / w.adLeads : null))}
+              fmt={money}
+              muted
+            />
+            <MetricRow label="Лидов (amoCRM), план" total={targets.find((tg) => tg.period === currentPeriod())?.leadsPlan ?? null} cells={weekBlocks.map((w) => w.leadsPlan)} fmt={(n) => String(Math.round(n))} />
+            <MetricRow label="Лидов (amoCRM), факт" total={t.amoNewLeads} cells={weekBlocks.map((w) => w.amoNewLeads)} fmt={(n) => String(n)} highlight />
+            <MetricRow
+              label="% выполнения (лиды)"
+              total={sumOrNull(weekBlocks.map((w) => w.leadsPlan)) ? (t.amoNewLeads / sumOrNull(weekBlocks.map((w) => w.leadsPlan))!) * 100 : null}
+              cells={weekBlocks.map((w) => (w.leadsPlan && w.leadsPlan > 0 ? (w.amoNewLeads / w.leadsPlan) * 100 : null))}
+              fmt={(n) => `${n.toFixed(0)}%`}
+              muted
+            />
+            <MetricRow
+              label="Конверсия сайта, %"
+              total={siteConversion}
+              cells={weekBlocks.map((w) => (w.linkClicks > 0 ? (w.adLeads / w.linkClicks) * 100 : null))}
+              fmt={(n) => `${n.toFixed(1)}%`}
+              muted
+            />
+            <MetricRow label="Закрыто сделок" total={t.amoWonCount} cells={weekBlocks.map((w) => w.amoWonCount)} fmt={(n) => String(n)} />
+            <MetricRow
+              label="Конверсия в продажу, %"
+              total={closeRate}
+              cells={weekBlocks.map((w) => (w.amoNewLeads > 0 ? (w.amoWonCount / w.amoNewLeads) * 100 : null))}
+              fmt={(n) => `${n.toFixed(1)}%`}
+              muted
+            />
+            <MetricRow label="Выручка, ₸" total={t.amoWonRevenue} cells={weekBlocks.map((w) => w.amoWonRevenue)} fmt={money} highlight />
+            <MetricRow
+              label="Средний чек, ₸"
+              total={avgDeal}
+              cells={weekBlocks.map((w) => (w.amoNewLeads > 0 ? w.amoLeadValue / w.amoNewLeads : null))}
+              fmt={money}
+              muted
+            />
+            <MetricRow
+              label="ROMI, %"
+              total={romi}
+              cells={weekBlocks.map((w) => (w.adSpendKzt > 0 ? ((w.amoWonRevenue - w.adSpendKzt) / w.adSpendKzt) * 100 : null))}
+              fmt={(n) => `${n.toFixed(0)}%`}
+            />
+            <tr className="border-t border-gray-100">
+              <td className="sticky left-0 bg-white p-2 align-top text-xs font-medium text-gray-500">Решения</td>
+              <td />
+              {weekBlocks.map((w) => {
+                const weekNotes = notes.filter((n) => n.week_start === w.weekStart);
+                return (
+                  <td key={w.weekStart} className="min-w-[160px] p-2 align-top">
+                    {weekNotes.map((n) => (
+                      <p key={n.id} className="mb-1 text-[11px] text-gray-600">
+                        <span className="text-gray-400">{n.created_by_name ?? "—"}:</span> {n.note}
+                      </p>
+                    ))}
                     {addingNoteFor === w.weekStart ? (
-                      <div className="mt-1 flex gap-2">
+                      <div className="flex flex-col gap-1">
                         <input
                           autoFocus
                           value={noteDraft[w.weekStart] ?? ""}
                           onChange={(e) => setNoteDraft((prev) => ({ ...prev, [w.weekStart]: e.target.value }))}
                           onKeyDown={(e) => e.key === "Enter" && addNote(w.weekStart)}
-                          placeholder="Что решили по этой неделе"
-                          className="flex-1 rounded-md border border-gray-200 px-2 py-1 text-xs"
+                          placeholder="Заметка"
+                          className="w-full rounded-md border border-gray-200 px-1.5 py-1 text-[11px]"
                         />
-                        <button onClick={() => addNote(w.weekStart)} className="rounded-md bg-red-600 px-2 py-1 text-xs text-white hover:bg-red-700">
+                        <button onClick={() => addNote(w.weekStart)} className="rounded-md bg-red-600 px-1.5 py-0.5 text-[11px] text-white hover:bg-red-700">
                           Добавить
                         </button>
                       </div>
                     ) : (
-                      <button onClick={() => setAddingNoteFor(w.weekStart)} className="mt-1 text-xs text-gray-400 underline hover:text-gray-600">
-                        + добавить заметку
+                      <button onClick={() => setAddingNoteFor(w.weekStart)} className="text-[11px] text-gray-400 underline hover:text-gray-600">
+                        + заметка
                       </button>
                     )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+                  </td>
+                );
+              })}
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
       <div className="mt-6 overflow-x-auto">
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">По дням</h3>
@@ -428,48 +470,38 @@ export default function RnpTable({ projectId }: { projectId: number }) {
   );
 }
 
-function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="rounded-lg bg-gray-50 p-3">
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className="mt-1 text-base font-semibold">{value}</p>
-      {hint && <p className="mt-0.5 text-[10px] text-gray-400">{hint}</p>}
-    </div>
-  );
+function sumOrNull(values: (number | null)[]): number | null {
+  const known = values.filter((v): v is number => v !== null);
+  return known.length > 0 ? known.reduce((a, b) => a + b, 0) : null;
 }
 
-function PlanFactBar({
+// One row of the metrics-by-week matrix: a label, a totals column, then one
+// cell per week. `null` cells render as "—" (no plan set / no data yet).
+function MetricRow({
   label,
-  plan,
-  fact,
-  pct,
+  total,
+  cells,
   fmt,
+  highlight,
+  muted,
 }: {
   label: string;
-  plan: number | null;
-  fact: number;
-  pct: number | null;
+  total: number | null;
+  cells: (number | null)[];
   fmt: (n: number) => string;
+  highlight?: boolean;
+  muted?: boolean;
 }) {
+  const textClass = highlight ? "font-semibold text-gray-900" : muted ? "text-gray-500" : "text-gray-700";
   return (
-    <div className="rounded-md bg-gray-50 p-2">
-      <div className="flex items-center justify-between text-xs">
-        <span className="text-gray-500">{label}</span>
-        <span className="font-medium">
-          {fmt(fact)} {plan !== null && <span className="text-gray-400">/ {fmt(plan)}</span>}
-        </span>
-      </div>
-      {pct !== null && (
-        <>
-          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-gray-200">
-            <div
-              className={`h-full rounded-full ${pct >= 100 ? "bg-green-500" : "bg-red-500"}`}
-              style={{ width: `${Math.min(pct, 100)}%` }}
-            />
-          </div>
-          <p className="mt-1 text-right text-[10px] text-gray-400">{pct.toFixed(0)}% от плана</p>
-        </>
-      )}
-    </div>
+    <tr className="border-b border-gray-50 last:border-0">
+      <td className={`sticky left-0 bg-white p-2 text-xs ${muted ? "text-gray-400" : "text-gray-600"}`}>{label}</td>
+      <td className={`p-2 text-right text-xs ${textClass}`}>{total !== null ? fmt(total) : "—"}</td>
+      {cells.map((v, i) => (
+        <td key={i} className={`p-2 text-right text-xs ${textClass}`}>
+          {v !== null ? fmt(v) : "—"}
+        </td>
+      ))}
+    </tr>
   );
 }

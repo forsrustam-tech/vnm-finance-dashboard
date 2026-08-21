@@ -33,7 +33,13 @@ export type WeekBlock = {
   weekStart: string; // Monday, 'YYYY-MM-DD'
   weekEnd: string; // Sunday, or range end if the range is shorter
   adSpendKzt: number;
+  impressions: number;
+  clicks: number;
+  linkClicks: number;
+  adLeads: number;
   amoNewLeads: number;
+  amoLeadValue: number;
+  amoWonCount: number;
   amoWonRevenue: number;
   budgetPlan: number | null;
   leadsPlan: number | null;
@@ -91,7 +97,13 @@ export function groupIntoWeeks(
         weekStart,
         weekEnd,
         adSpendKzt: sorted.reduce((s, r) => s + r.adSpendKzt, 0),
+        impressions: sorted.reduce((s, r) => s + r.impressions, 0),
+        clicks: sorted.reduce((s, r) => s + r.clicks, 0),
+        linkClicks: sorted.reduce((s, r) => s + r.linkClicks, 0),
+        adLeads: sorted.reduce((s, r) => s + r.adLeads, 0),
         amoNewLeads: sorted.reduce((s, r) => s + r.amoNewLeads, 0),
+        amoLeadValue: sorted.reduce((s, r) => s + r.amoLeadValue, 0),
+        amoWonCount: sorted.reduce((s, r) => s + r.amoWonCount, 0),
         amoWonRevenue: sorted.reduce((s, r) => s + r.amoWonRevenue, 0),
         budgetPlan: anyPlan ? budgetPlan : null,
         leadsPlan: anyPlan ? Math.round(leadsPlan) : null,
