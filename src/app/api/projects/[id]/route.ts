@@ -51,7 +51,7 @@ export async function GET(
     : allAssignments.filter((a) => a.user_id === user.id);
 
   const connections = await sql`
-    SELECT id, platform, ad_account_id, connected_at
+    SELECT id, platform, ad_account_id, currency, connected_at
     FROM ad_account_connections
     WHERE project_id = ${id}
     ORDER BY created_at DESC

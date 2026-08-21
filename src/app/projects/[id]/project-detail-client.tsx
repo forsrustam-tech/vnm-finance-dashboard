@@ -19,6 +19,7 @@ type Connection = {
   id: number;
   platform: string;
   ad_account_id: string;
+  currency: string | null;
   connected_at: string;
   summary: { spend: number; impressions: number; clicks: number; leads: number; days: number } | null;
 };
@@ -336,51 +337,57 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
         ) : (
           <div className="mt-3 flex flex-col gap-3">
             {connections.map((c) => (
-              <div key={c.id} className="rounded-lg border border-gray-100 p-4">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium">Meta Ads — {c.ad_account_id}</p>
-                  <button
-                    onClick={() => syncConnection(c.id)}
-                    disabled={syncingId === c.id}
-                    className="rounded-lg border border-gray-300 px-3 py-1 text-xs disabled:opacity-50"
-                  >
-                    {syncingId === c.id ? "Синхронизация..." : "Синхронизировать"}
-                  </button>
-                </div>
-                {c.summary ? (
-                  <div className="mt-2 grid grid-cols-2 gap-2 text-sm text-gray-600 sm:grid-cols-4">
-                    <p>Бюджет: ${c.summary.spend.toFixed(2)}</p>
-                    <p>Показы: {c.summary.impressions.toLocaleString("ru-RU")}</p>
-                    <p>
-                      CPM: $
-                      {c.summary.impressions > 0
-                        ? ((c.summary.spend / c.summary.impressions) * 1000).toFixed(2)
-                        : "0.00"}
-                    </p>
-                    <p>Клики: {c.summary.clicks.toLocaleString("ru-RU")}</p>
-                    <p>
-                      CPC: $
-                      {c.summary.clicks > 0 ? (c.summary.spend / c.summary.clicks).toFixed(2) : "0.00"}
-                    </p>
-                    <p>
-                      CTR:{" "}
-                      {c.summary.impressions > 0
-                        ? ((c.summary.clicks / c.summary.impressions) * 100).toFixed(2)
-                        : "0.00"}
-                      %
-                    </p>
-                    <p>Лиды: {c.summary.leads}</p>
-                    <p>
-                      Цена лида: $
-                      {c.summary.leads > 0 ? (c.summary.spend / c.summary.leads).toFixed(2) : "0.00"}
-                    </p>
+              (() => {
+                const currency = c.currency || "KZT";
+                const fmtMoney = (n: number) =>
+                  currency === "KZT"
+                    ? `${n.toLocaleString("ru-RU", { maximumFractionDigits: 0 })} ₸`
+                    : `${currency} ${n.toFixed(2)}`;
+                const platformLabel = c.platform === "meta" ? "Meta Ads" : c.platform === "manual" ? "Вручную" : c.platform;
+                return (
+                  <div key={c.id} className="rounded-lg border border-gray-100 p-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium">
+                        {platformLabel}
+                        {c.ad_account_id ? ` — ${c.ad_account_id}` : ""}
+                      </p>
+                      {c.platform !== "manual" && (
+                        <button
+                          onClick={() => syncConnection(c.id)}
+                          disabled={syncingId === c.id}
+                          className="rounded-lg border border-gray-300 px-3 py-1 text-xs disabled:opacity-50"
+                        >
+                          {syncingId === c.id ? "Синхронизация..." : "Синхронизировать"}
+                        </button>
+                      )}
+                    </div>
+                    {c.summary ? (
+                      <div className="mt-2 grid grid-cols-2 gap-2 text-sm text-gray-600 sm:grid-cols-4">
+                        <p>Бюджет: {fmtMoney(c.summary.spend)}</p>
+                        <p>Показы: {c.summary.impressions.toLocaleString("ru-RU")}</p>
+                        <p>
+                          CPM: {fmtMoney(c.summary.impressions > 0 ? (c.summary.spend / c.summary.impressions) * 1000 : 0)}
+                        </p>
+                        <p>Клики: {c.summary.clicks.toLocaleString("ru-RU")}</p>
+                        <p>CPC: {fmtMoney(c.summary.clicks > 0 ? c.summary.spend / c.summary.clicks : 0)}</p>
+                        <p>
+                          CTR:{" "}
+                          {c.summary.impressions > 0
+                            ? ((c.summary.clicks / c.summary.impressions) * 100).toFixed(2)
+                            : "0.00"}
+                          %
+                        </p>
+                        <p>Лиды: {c.summary.leads}</p>
+                        <p>Цена лида: {fmtMoney(c.summary.leads > 0 ? c.summary.spend / c.summary.leads : 0)}</p>
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-sm text-gray-400">
+                        Данных пока нет — нажмите «Синхронизировать».
+                      </p>
+                    )}
                   </div>
-                ) : (
-                  <p className="mt-2 text-sm text-gray-400">
-                    Данных пока нет — нажмите «Синхронизировать».
-                  </p>
-                )}
-              </div>
+                );
+              })()
             ))}
           </div>
         )}
