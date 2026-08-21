@@ -381,9 +381,7 @@ function MetricsMatrix({
   const cpl = t.adLeads > 0 ? t.adSpendKzt / t.adLeads : null;
   const cpm = t.impressions > 0 ? (t.adSpendKzt / t.impressions) * 1000 : null;
   const ctr = t.impressions > 0 ? (t.clicks / t.impressions) * 100 : null;
-  const siteConversion = t.linkClicks > 0 ? (t.adLeads / t.linkClicks) * 100 : null;
-  const opConversion = t.bookings > 0 ? (t.amoWonCount / t.bookings) * 100 : null;
-  const closeRate = t.amoNewLeads > 0 ? (t.amoWonCount / t.amoNewLeads) * 100 : null;
+  const leadToBookingConversion = t.amoNewLeads > 0 ? (t.bookings / t.amoNewLeads) * 100 : null;
   const avgDeal = t.amoNewLeads > 0 ? t.amoLeadValue / t.amoNewLeads : null;
 
   const showNotes = Boolean(notes && setNoteDraft && setAddingNoteFor && addNote);
@@ -426,33 +424,19 @@ function MetricsMatrix({
             fmt={(n) => `${n.toFixed(0)}%`}
             muted
           />
-          <MetricRow
-            label="Конверсия сайта, %"
-            total={siteConversion}
-            cells={cols.map((c) => (c.linkClicks > 0 ? (c.adLeads / c.linkClicks) * 100 : null))}
-            fmt={(n) => `${n.toFixed(1)}%`}
-            muted
-          />
           {hasBookingStage && (
             <>
               <MetricRow label="Записи" total={t.bookings} cells={cols.map((c) => c.bookings)} fmt={(n) => String(n)} highlight />
               <MetricRow label="Записи, ₸" total={t.bookingsValue} cells={cols.map((c) => c.bookingsValue)} fmt={money} muted />
               <MetricRow
-                label="Конверсия ОП (запись → оплата), %"
-                total={opConversion}
-                cells={cols.map((c) => (c.bookings > 0 ? (c.amoWonCount / c.bookings) * 100 : null))}
+                label="Конверсия (заявка → запись), %"
+                total={leadToBookingConversion}
+                cells={cols.map((c) => (c.amoNewLeads > 0 ? (c.bookings / c.amoNewLeads) * 100 : null))}
                 fmt={(n) => `${n.toFixed(1)}%`}
                 muted
               />
             </>
           )}
-          <MetricRow
-            label="Конверсия в продажу (заявка → оплата), %"
-            total={closeRate}
-            cells={cols.map((c) => (c.amoNewLeads > 0 ? (c.amoWonCount / c.amoNewLeads) * 100 : null))}
-            fmt={(n) => `${n.toFixed(1)}%`}
-            muted
-          />
           <MetricRow label="Оплаты основной услуги, кол-во" total={t.amoWonCount} cells={cols.map((c) => c.amoWonCount)} fmt={(n) => String(n)} highlight />
           <MetricRow label="Оплаты основной услуги, ₸" total={t.amoWonRevenue} cells={cols.map((c) => c.amoWonRevenue)} fmt={money} highlight />
           <MetricRow
