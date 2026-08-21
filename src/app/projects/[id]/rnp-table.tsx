@@ -15,9 +15,10 @@ type RnpRow = {
   amoLeadValue: number;
   amoWonCount: number;
   amoWonRevenue: number;
+  bookings: number;
 };
 
-type Funnel = { connectionId: number; label: string; stages: { name: string; count: number }[] };
+type Funnel = { connectionId: number; label: string; bookingStageName: string | null; stages: { name: string; count: number }[] };
 type CurrencyNote = { currency: string; rate: number | null };
 type Platform = { platform: string; adSpendKzt: number; impressions: number; clicks: number; adLeads: number };
 type WeekBlock = {
@@ -32,6 +33,7 @@ type WeekBlock = {
   amoLeadValue: number;
   amoWonCount: number;
   amoWonRevenue: number;
+  bookings: number;
   budgetPlan: number | null;
   leadsPlan: number | null;
 };
@@ -166,15 +168,18 @@ export default function RnpTable({ projectId }: { projectId: number }) {
       amoLeadValue: acc.amoLeadValue + r.amoLeadValue,
       amoWonCount: acc.amoWonCount + r.amoWonCount,
       amoWonRevenue: acc.amoWonRevenue + r.amoWonRevenue,
+      bookings: acc.bookings + r.bookings,
     }),
-    { adSpendKzt: 0, impressions: 0, clicks: 0, linkClicks: 0, adLeads: 0, amoNewLeads: 0, amoLeadValue: 0, amoWonCount: 0, amoWonRevenue: 0 }
+    { adSpendKzt: 0, impressions: 0, clicks: 0, linkClicks: 0, adLeads: 0, amoNewLeads: 0, amoLeadValue: 0, amoWonCount: 0, amoWonRevenue: 0, bookings: 0 }
   );
   const hasUnconverted = rows.some((r) => r.hasUnconvertedSpend);
+  const hasBookingStage = funnels.some((f) => f.bookingStageName);
 
   const cpl = t.adLeads > 0 ? t.adSpendKzt / t.adLeads : null;
   const cpm = t.impressions > 0 ? (t.adSpendKzt / t.impressions) * 1000 : null;
   const ctr = t.impressions > 0 ? (t.clicks / t.impressions) * 100 : null;
   const siteConversion = t.linkClicks > 0 ? (t.adLeads / t.linkClicks) * 100 : null;
+  const opConversion = t.bookings > 0 ? (t.amoWonCount / t.bookings) * 100 : null;
   const closeRate = t.amoNewLeads > 0 ? (t.amoWonCount / t.amoNewLeads) * 100 : null;
   const avgDeal = t.amoNewLeads > 0 ? t.amoLeadValue / t.amoNewLeads : null;
 
@@ -287,7 +292,7 @@ export default function RnpTable({ projectId }: { projectId: number }) {
         <table className="w-full min-w-[640px] border-collapse text-sm">
           <thead>
             <tr className="border-b border-gray-100 bg-gray-50 text-xs text-gray-500">
-              <th className="sticky left-0 bg-gray-50 p-2 text-left font-medium">Метрика</th>
+              <th className="sticky left-0 z-10 border-r border-gray-200 bg-gray-50 p-2 text-left font-medium">Метрика</th>
               <th className="min-w-[110px] p-2 text-right font-medium">Итого</th>
               {weekBlocks.map((w) => (
                 <th key={w.weekStart} className="min-w-[100px] p-2 text-right font-medium">
@@ -324,10 +329,10 @@ export default function RnpTable({ projectId }: { projectId: number }) {
               fmt={money}
               muted
             />
-            <MetricRow label="Лидов (amoCRM), план" total={targets.find((tg) => tg.period === currentPeriod())?.leadsPlan ?? null} cells={weekBlocks.map((w) => w.leadsPlan)} fmt={(n) => String(Math.round(n))} />
-            <MetricRow label="Лидов (amoCRM), факт" total={t.amoNewLeads} cells={weekBlocks.map((w) => w.amoNewLeads)} fmt={(n) => String(n)} highlight />
+            <MetricRow label="Заявки, план" total={targets.find((tg) => tg.period === currentPeriod())?.leadsPlan ?? null} cells={weekBlocks.map((w) => w.leadsPlan)} fmt={(n) => String(Math.round(n))} />
+            <MetricRow label="Заявки (amoCRM), факт" total={t.amoNewLeads} cells={weekBlocks.map((w) => w.amoNewLeads)} fmt={(n) => String(n)} highlight />
             <MetricRow
-              label="% выполнения (лиды)"
+              label="% выполнения (заявки)"
               total={sumOrNull(weekBlocks.map((w) => w.leadsPlan)) ? (t.amoNewLeads / sumOrNull(weekBlocks.map((w) => w.leadsPlan))!) * 100 : null}
               cells={weekBlocks.map((w) => (w.leadsPlan && w.leadsPlan > 0 ? (w.amoNewLeads / w.leadsPlan) * 100 : null))}
               fmt={(n) => `${n.toFixed(0)}%`}
@@ -340,15 +345,27 @@ export default function RnpTable({ projectId }: { projectId: number }) {
               fmt={(n) => `${n.toFixed(1)}%`}
               muted
             />
-            <MetricRow label="Закрыто сделок" total={t.amoWonCount} cells={weekBlocks.map((w) => w.amoWonCount)} fmt={(n) => String(n)} />
+            {hasBookingStage && (
+              <>
+                <MetricRow label="Записи" total={t.bookings} cells={weekBlocks.map((w) => w.bookings)} fmt={(n) => String(n)} highlight />
+                <MetricRow
+                  label="Конверсия ОП (запись → оплата), %"
+                  total={opConversion}
+                  cells={weekBlocks.map((w) => (w.bookings > 0 ? (w.amoWonCount / w.bookings) * 100 : null))}
+                  fmt={(n) => `${n.toFixed(1)}%`}
+                  muted
+                />
+              </>
+            )}
             <MetricRow
-              label="Конверсия в продажу, %"
+              label="Конверсия в продажу (заявка → оплата), %"
               total={closeRate}
               cells={weekBlocks.map((w) => (w.amoNewLeads > 0 ? (w.amoWonCount / w.amoNewLeads) * 100 : null))}
               fmt={(n) => `${n.toFixed(1)}%`}
               muted
             />
-            <MetricRow label="Выручка, ₸" total={t.amoWonRevenue} cells={weekBlocks.map((w) => w.amoWonRevenue)} fmt={money} highlight />
+            <MetricRow label="Оплаты основной услуги, кол-во" total={t.amoWonCount} cells={weekBlocks.map((w) => w.amoWonCount)} fmt={(n) => String(n)} highlight />
+            <MetricRow label="Оплаты основной услуги, ₸" total={t.amoWonRevenue} cells={weekBlocks.map((w) => w.amoWonRevenue)} fmt={money} highlight />
             <MetricRow
               label="Средний чек, ₸"
               total={avgDeal}
@@ -363,7 +380,7 @@ export default function RnpTable({ projectId }: { projectId: number }) {
               fmt={(n) => `${n.toFixed(0)}%`}
             />
             <tr className="border-t border-gray-100">
-              <td className="sticky left-0 bg-white p-2 align-top text-xs font-medium text-gray-500">Решения</td>
+              <td className="sticky left-0 z-10 border-r border-gray-200 bg-white p-2 align-top text-xs font-medium text-gray-500">Решения</td>
               <td />
               {weekBlocks.map((w) => {
                 const weekNotes = notes.filter((n) => n.week_start === w.weekStart);
@@ -495,7 +512,7 @@ function MetricRow({
   const textClass = highlight ? "font-semibold text-gray-900" : muted ? "text-gray-500" : "text-gray-700";
   return (
     <tr className="border-b border-gray-50 last:border-0">
-      <td className={`sticky left-0 bg-white p-2 text-xs ${muted ? "text-gray-400" : "text-gray-600"}`}>{label}</td>
+      <td className={`sticky left-0 z-10 border-r border-gray-200 bg-white p-2 text-xs ${muted ? "text-gray-400" : "text-gray-600"}`}>{label}</td>
       <td className={`p-2 text-right text-xs ${textClass}`}>{total !== null ? fmt(total) : "—"}</td>
       {cells.map((v, i) => (
         <td key={i} className={`p-2 text-right text-xs ${textClass}`}>

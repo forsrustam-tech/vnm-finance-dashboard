@@ -73,6 +73,25 @@ export type DailyAmoSnapshot = {
   wonRevenue: number;
 };
 
+// For the "which stage counts as a booking" picker — one flat list across
+// all of the account's pipelines, since amoCRM stage names aren't globally
+// unique but the picker just needs something a human can read and pick.
+export async function fetchPipelineStages(subdomain: string, token: string): Promise<{ id: number; name: string; pipelineName: string }[]> {
+  const headers = { Authorization: `Bearer ${token}` };
+  const base = `https://${subdomain}.amocrm.ru/api/v4`;
+  const res = await fetch(`${base}/leads/pipelines`, { headers });
+  if (!res.ok) throw new Error(`amoCRM pipelines fetch failed: ${res.status}`);
+  const data = await res.json();
+  const pipelines: Pipeline[] = data._embedded?.pipelines ?? [];
+  const stages: { id: number; name: string; pipelineName: string }[] = [];
+  for (const pipeline of pipelines) {
+    for (const status of pipeline._embedded?.statuses ?? []) {
+      stages.push({ id: status.id, name: status.name, pipelineName: pipeline.name });
+    }
+  }
+  return stages;
+}
+
 async function fetchStageNames(base: string, headers: Record<string, string>): Promise<Map<number, string>> {
   const res = await fetch(`${base}/leads/pipelines`, { headers });
   if (!res.ok) throw new Error(`amoCRM pipelines fetch failed: ${res.status}`);

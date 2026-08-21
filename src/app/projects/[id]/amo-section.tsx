@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 
 export type AmoConnection = { id: number; label: string; subdomain: string; webhook_secret: string | null };
 
+type Stage = { id: number; name: string; pipelineName: string };
+
 type AmoSummary = {
   totalLeads: number;
   byStage: { name: string; count: number }[];
@@ -116,6 +118,39 @@ function AmoConnectionCard({
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
 
+  const [stages, setStages] = useState<Stage[] | null>(null);
+  const [bookingStageName, setBookingStageName] = useState<string | null>(null);
+  const [loadingStages, setLoadingStages] = useState(false);
+  const [stagesError, setStagesError] = useState("");
+  const [savingStage, setSavingStage] = useState(false);
+
+  async function loadStages() {
+    setLoadingStages(true);
+    setStagesError("");
+    const res = await fetch(`/api/amo/connections/${connection.id}/stages`);
+    if (res.ok) {
+      const data = await res.json();
+      setStages(data.stages);
+      setBookingStageName(data.bookingStageName ?? null);
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setStagesError(data.error ?? "Не удалось получить этапы");
+    }
+    setLoadingStages(false);
+  }
+
+  async function saveBookingStage(name: string) {
+    setSavingStage(true);
+    const value = name || null;
+    const res = await fetch(`/api/amo/connections/${connection.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bookingStageName: value }),
+    });
+    if (res.ok) setBookingStageName(value);
+    setSavingStage(false);
+  }
+
   const webhookUrl =
     connection.webhook_secret && typeof window !== "undefined"
       ? `${window.location.origin}/api/webhooks/amo/${connection.id}/${connection.webhook_secret}`
@@ -145,6 +180,7 @@ function AmoConnectionCard({
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time fetch on mount
     loadSummary();
+    loadStages();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connection.id]);
 
@@ -198,6 +234,27 @@ function AmoConnectionCard({
           </div>
         </div>
       )}
+
+      <div className="mt-3 rounded-lg bg-gray-50 p-3">
+        <p className="text-xs font-medium text-gray-600">Какой этап считать «Записью» в РНП</p>
+        {stagesError && <p className="mt-1 text-xs text-red-600">{stagesError}</p>}
+        {stages && (
+          <select
+            value={bookingStageName ?? ""}
+            onChange={(e) => saveBookingStage(e.target.value)}
+            disabled={savingStage}
+            className="mt-1.5 w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs"
+          >
+            <option value="">Не выбрано</option>
+            {stages.map((s) => (
+              <option key={s.id} value={s.name}>
+                {s.name} ({s.pipelineName})
+              </option>
+            ))}
+          </select>
+        )}
+        {loadingStages && !stages && <p className="mt-1 text-xs text-gray-400">Загружаю этапы...</p>}
+      </div>
 
       {summary && (
         <>

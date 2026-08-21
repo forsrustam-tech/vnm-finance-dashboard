@@ -14,9 +14,15 @@ export type RnpRow = {
   amoLeadValue: number;
   amoWonCount: number;
   amoWonRevenue: number;
+  bookings: number;
 };
 
-export type RnpFunnel = { connectionId: number; label: string; stages: { name: string; count: number }[] };
+export type RnpFunnel = {
+  connectionId: number;
+  label: string;
+  bookingStageName: string | null;
+  stages: { name: string; count: number }[];
+};
 export type RnpCurrencyNote = { currency: string; rate: number | null };
 export type RnpPlatform = { platform: string; adSpendKzt: number; impressions: number; clicks: number; adLeads: number };
 
@@ -41,6 +47,7 @@ export type WeekBlock = {
   amoLeadValue: number;
   amoWonCount: number;
   amoWonRevenue: number;
+  bookings: number;
   budgetPlan: number | null;
   leadsPlan: number | null;
 };
@@ -105,6 +112,7 @@ export function groupIntoWeeks(
         amoLeadValue: sorted.reduce((s, r) => s + r.amoLeadValue, 0),
         amoWonCount: sorted.reduce((s, r) => s + r.amoWonCount, 0),
         amoWonRevenue: sorted.reduce((s, r) => s + r.amoWonRevenue, 0),
+        bookings: sorted.reduce((s, r) => s + r.bookings, 0),
         budgetPlan: anyPlan ? budgetPlan : null,
         leadsPlan: anyPlan ? Math.round(leadsPlan) : null,
       };
@@ -144,8 +152,15 @@ export async function getRnpData(projectId: string, fromDate: string, toDate: st
     if (!rateByCurrency.has(cur)) rateByCurrency.set(cur, await getKztRate(cur));
   }
 
+  const amoConnections = await sql`
+    SELECT id, label, booking_stage_name FROM amo_connections WHERE project_id = ${projectId} ORDER BY label
+  `;
+  const bookingStageByConnection = new Map(
+    amoConnections.filter((c) => c.booking_stage_name).map((c) => [c.id, c.booking_stage_name as string])
+  );
+
   const amoRows = await sql`
-    SELECT s.date, s.new_leads, s.total_lead_value, s.won_count, s.won_revenue
+    SELECT s.connection_id, s.date, s.new_leads, s.total_lead_value, s.won_count, s.won_revenue, s.by_stage
     FROM amo_daily_snapshots s
     JOIN amo_connections c ON c.id = s.connection_id
     WHERE c.project_id = ${projectId} AND s.date >= ${fromDate} AND s.date <= ${toDate}
@@ -175,6 +190,7 @@ export async function getRnpData(projectId: string, fromDate: string, toDate: st
       amoLeadValue: 0,
       amoWonCount: 0,
       amoWonRevenue: 0,
+      bookings: 0,
     });
   }
   const dateKey = (v: unknown) => (v instanceof Date ? v.toISOString().slice(0, 10) : String(v));
@@ -186,6 +202,13 @@ export async function getRnpData(projectId: string, fromDate: string, toDate: st
     entry.amoLeadValue += Number(row.total_lead_value);
     entry.amoWonCount += Number(row.won_count);
     entry.amoWonRevenue += Number(row.won_revenue);
+
+    const bookingStage = bookingStageByConnection.get(row.connection_id);
+    if (bookingStage) {
+      const stages = typeof row.by_stage === "string" ? JSON.parse(row.by_stage) : row.by_stage ?? [];
+      const match = (stages as { name: string; count: number }[]).find((s) => s.name === bookingStage);
+      entry.bookings += match ? Number(match.count) : 0;
+    }
   }
   for (const row of adRows) {
     const currency = currencyByConnection.get(row.connection_id) ?? "KZT";
@@ -219,17 +242,8 @@ export async function getRnpData(projectId: string, fromDate: string, toDate: st
   const rows = dates.map((date) => ({ date, ...byDate.get(date)! }));
   const platforms = [...byPlatform.values()].sort((a, b) => b.adSpendKzt - a.adSpendKzt);
 
-  const amoConnections = await sql`
-    SELECT id, label FROM amo_connections WHERE project_id = ${projectId} ORDER BY label
-  `;
-  const stageSnapshotRows = await sql`
-    SELECT s.connection_id, s.by_stage
-    FROM amo_daily_snapshots s
-    JOIN amo_connections c ON c.id = s.connection_id
-    WHERE c.project_id = ${projectId} AND s.date >= ${fromDate} AND s.date <= ${toDate}
-  `;
   const stagesByConnection = new Map<number, Map<string, number>>();
-  for (const row of stageSnapshotRows) {
+  for (const row of amoRows) {
     const stages = typeof row.by_stage === "string" ? JSON.parse(row.by_stage) : row.by_stage ?? [];
     const acc = stagesByConnection.get(row.connection_id) ?? new Map<string, number>();
     for (const s of stages as { name: string; count: number }[]) {
@@ -240,6 +254,7 @@ export async function getRnpData(projectId: string, fromDate: string, toDate: st
   const funnels = amoConnections.map((c) => ({
     connectionId: c.id,
     label: c.label,
+    bookingStageName: c.booking_stage_name as string | null,
     stages: [...(stagesByConnection.get(c.id)?.entries() ?? [])]
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => b.count - a.count),
