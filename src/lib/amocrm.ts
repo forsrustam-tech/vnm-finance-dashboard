@@ -82,10 +82,67 @@ async function fetchLeadsPriceSum(subdomain: string, token: string, leadIds: num
   return total;
 }
 
-// Count + ₸ total of leads that entered `statusId` within [fromMs, toMs),
+// Leads created within [fromMs, toMs), paginated — amoCRM caps a single page
+// at 250, and a busy connection can create more than that in one day.
+async function fetchLeadsCreatedInRange(
+  subdomain: string,
+  token: string,
+  fromMs: number,
+  toMs: number
+): Promise<{ id: number; status_id: number }[]> {
+  const headers = { Authorization: `Bearer ${token}` };
+  const base = `https://${subdomain}.amocrm.ru/api/v4`;
+  const from = Math.floor(fromMs / 1000);
+  const to = Math.floor(toMs / 1000);
+
+  const leads: { id: number; status_id: number }[] = [];
+  for (let page = 1; page <= 10; page++) {
+    const res = await fetch(
+      `${base}/leads?filter[created_at][from]=${from}&filter[created_at][to]=${to}&limit=250&page=${page}`,
+      { headers }
+    );
+    if (res.status === 204) break;
+    if (!res.ok) throw new Error(`amoCRM leads fetch failed: ${res.status}`);
+    const data = await res.json();
+    const page_leads: { id: number; status_id: number }[] = data._embedded?.leads ?? [];
+    if (page_leads.length === 0) break;
+    leads.push(...page_leads);
+    if (page_leads.length < 250) break;
+  }
+  return leads;
+}
+
+// Whether this lead's history contains a lead_status_changed event landing on
+// `statusId` — used to tell "created directly into this status" (no such
+// event will ever exist) apart from "moved here on some other day" (which
+// fetchStageEntryLeadIds already dates and counts correctly on its own).
+async function leadEverEnteredStatus(subdomain: string, token: string, leadId: number, statusId: number): Promise<boolean> {
+  const headers = { Authorization: `Bearer ${token}` };
+  const base = `https://${subdomain}.amocrm.ru/api/v4`;
+  const res = await fetch(
+    `${base}/events?filter[type]=lead_status_changed&filter[entity]=lead&filter[entity_id][]=${leadId}&limit=250`,
+    { headers }
+  );
+  if (res.status === 204) return false;
+  if (!res.ok) throw new Error(`amoCRM events fetch failed: ${res.status}`);
+  const data = await res.json();
+  const events: AmoEvent[] = data._embedded?.events ?? [];
+  return events.some((ev) => ev.value_after?.[0]?.lead_status?.id === statusId);
+}
+
+// Count + ₸ total of leads that "entered" `statusId` within [fromMs, toMs),
 // dated by actual transition moment. Used for both the booking stage and the
 // won stage — same shape of question ("how many, and worth how much, entered
 // this stage today"), just a different statusId.
+//
+// Two ways in: (1) a lead_status_changed event landing on statusId today —
+// covers a lead moved here from elsewhere, regardless of when it was
+// created. (2) a lead created today that's currently sitting in statusId but
+// has NO such event anywhere in its history — amoCRM doesn't emit a
+// lead_status_changed event when a lead is created directly into a
+// non-default status (e.g. via a booking widget), so (1) alone silently
+// misses these; they're dated by their creation day instead, the only date
+// we have for them.
 export async function fetchStageEntrySummary(
   subdomain: string,
   token: string,
@@ -93,7 +150,16 @@ export async function fetchStageEntrySummary(
   fromMs: number,
   toMs: number
 ): Promise<{ count: number; revenue: number }> {
-  const ids = await fetchStageEntryLeadIds(subdomain, token, statusId, fromMs, toMs);
+  const transitionedIds = new Set(await fetchStageEntryLeadIds(subdomain, token, statusId, fromMs, toMs));
+
+  const createdLeads = await fetchLeadsCreatedInRange(subdomain, token, fromMs, toMs);
+  const bornInStatus = createdLeads.filter((l) => l.status_id === statusId && !transitionedIds.has(l.id));
+  for (const lead of bornInStatus) {
+    const hasEvent = await leadEverEnteredStatus(subdomain, token, lead.id, statusId);
+    if (!hasEvent) transitionedIds.add(lead.id);
+  }
+
+  const ids = [...transitionedIds];
   const revenue = await fetchLeadsPriceSum(subdomain, token, ids);
   return { count: ids.length, revenue };
 }
