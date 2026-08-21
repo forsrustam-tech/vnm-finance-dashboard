@@ -20,23 +20,25 @@ export type AmoSummary = {
 
 type AmoEvent = { entity_id: number; created_at: number; value_after?: { lead_status?: { id: number } }[] };
 
-// Counts leads that transitioned INTO `statusId` within [fromMs, toMs), by the
-// actual moment of transition (via the Events API), not by created_at — a
-// lead created last week but moved into this stage today should count today,
-// which a leads-list filtered by created_at can never tell you.
-export async function fetchStageEntryCount(
+// Lead ids that transitioned INTO `statusId` within [fromMs, toMs), by the
+// actual moment of transition (via the Events API), not by created_at or
+// current status — a lead created last week but moved into this stage today
+// should count today, and a lead that later moves OUT of this stage should
+// still count for the day it entered, which a leads-list filtered by
+// created_at/closed_at + current status_id can never tell you correctly.
+async function fetchStageEntryLeadIds(
   subdomain: string,
   token: string,
   statusId: number,
   fromMs: number,
   toMs: number
-): Promise<number> {
+): Promise<number[]> {
   const headers = { Authorization: `Bearer ${token}` };
   const base = `https://${subdomain}.amocrm.ru/api/v4`;
   const from = Math.floor(fromMs / 1000);
   const to = Math.floor(toMs / 1000);
 
-  let count = 0;
+  const ids = new Set<number>();
   let page = 1;
   // Guard against an unbounded loop on a very busy pipeline — 10 pages of
   // 250 is 2500 status-change events in one day, far beyond any realistic
@@ -52,11 +54,48 @@ export async function fetchStageEntryCount(
     const events: AmoEvent[] = data._embedded?.events ?? [];
     if (events.length === 0) break;
     for (const ev of events) {
-      if (ev.value_after?.[0]?.lead_status?.id === statusId) count += 1;
+      if (ev.value_after?.[0]?.lead_status?.id === statusId) ids.add(ev.entity_id);
     }
     if (events.length < 250) break;
   }
-  return count;
+  return [...ids];
+}
+
+// Sums the current `price` of a batch of leads by id — used to turn a list of
+// "entered this stage today" lead ids into a ₸ total (bookings sum, won revenue).
+async function fetchLeadsPriceSum(subdomain: string, token: string, leadIds: number[]): Promise<number> {
+  if (leadIds.length === 0) return 0;
+  const headers = { Authorization: `Bearer ${token}` };
+  const base = `https://${subdomain}.amocrm.ru/api/v4`;
+  const batchSize = 50;
+  let total = 0;
+  for (let i = 0; i < leadIds.length; i += batchSize) {
+    const batch = leadIds.slice(i, i + batchSize);
+    const qs = batch.map((id) => `filter[id][]=${id}`).join("&");
+    const res = await fetch(`${base}/leads?${qs}&limit=250`, { headers });
+    if (res.status === 204) continue;
+    if (!res.ok) throw new Error(`amoCRM leads-by-id fetch failed: ${res.status}`);
+    const data = await res.json();
+    const leads: { price: number }[] = data._embedded?.leads ?? [];
+    for (const lead of leads) total += Number(lead.price) || 0;
+  }
+  return total;
+}
+
+// Count + ₸ total of leads that entered `statusId` within [fromMs, toMs),
+// dated by actual transition moment. Used for both the booking stage and the
+// won stage — same shape of question ("how many, and worth how much, entered
+// this stage today"), just a different statusId.
+export async function fetchStageEntrySummary(
+  subdomain: string,
+  token: string,
+  statusId: number,
+  fromMs: number,
+  toMs: number
+): Promise<{ count: number; revenue: number }> {
+  const ids = await fetchStageEntryLeadIds(subdomain, token, statusId, fromMs, toMs);
+  const revenue = await fetchLeadsPriceSum(subdomain, token, ids);
+  return { count: ids.length, revenue };
 }
 
 export async function fetchAmoSummary(subdomain: string, token: string): Promise<AmoSummary> {
@@ -148,8 +187,11 @@ async function fetchStageNames(base: string, headers: Record<string, string>): P
 }
 
 // Feeds amo_daily_snapshots: new leads created on this single day (with their
-// current stage), plus deals actually won that day (filtered by closed_at,
-// not created_at — a lead created earlier but won today should still count).
+// current stage), plus deals that actually entered the won status that day —
+// by the Events API, not by closed_at + current status_id. A lead whose
+// closed_at falls today but that later moved on to some other stage (e.g. a
+// post-sale/upsell pipeline) would silently vanish from a closed_at+current-
+// status filter even though it was genuinely won today.
 export async function fetchDailyAmoSnapshot(
   subdomain: string,
   token: string,
@@ -161,20 +203,15 @@ export async function fetchDailyAmoSnapshot(
   const from = Math.floor(fromMs / 1000);
   const to = Math.floor(toMs / 1000);
 
-  const stageNames = await fetchStageNames(base, headers);
-
-  const [createdRes, closedRes] = await Promise.all([
+  const [stageNames, createdRes, won] = await Promise.all([
+    fetchStageNames(base, headers),
     fetch(`${base}/leads?filter[created_at][from]=${from}&filter[created_at][to]=${to}&limit=250`, { headers }),
-    fetch(`${base}/leads?filter[closed_at][from]=${from}&filter[closed_at][to]=${to}&limit=250`, { headers }),
+    fetchStageEntrySummary(subdomain, token, WON_STATUS_ID, fromMs, toMs),
   ]);
   if (!createdRes.ok) throw new Error(`amoCRM leads fetch failed: ${createdRes.status}`);
-  if (!closedRes.ok) throw new Error(`amoCRM won-revenue fetch failed: ${closedRes.status}`);
 
   const createdData = await createdRes.json();
   const createdLeads: { status_id: number; price: number }[] = createdData._embedded?.leads ?? [];
-
-  const closedData = await closedRes.json();
-  const closedLeads: { status_id: number; price: number }[] = closedData._embedded?.leads ?? [];
 
   const stageCounts = new Map<string, number>();
   let totalLeadValue = 0;
@@ -184,20 +221,11 @@ export async function fetchDailyAmoSnapshot(
     totalLeadValue += Number(lead.price) || 0;
   }
 
-  let wonCount = 0;
-  let wonRevenue = 0;
-  for (const lead of closedLeads) {
-    if (lead.status_id === WON_STATUS_ID) {
-      wonCount += 1;
-      wonRevenue += Number(lead.price) || 0;
-    }
-  }
-
   return {
     newLeads: createdLeads.length,
     totalLeadValue,
     byStage: [...stageCounts.entries()].map(([name, count]) => ({ name, count })),
-    wonCount,
-    wonRevenue,
+    wonCount: won.count,
+    wonRevenue: won.revenue,
   };
 }

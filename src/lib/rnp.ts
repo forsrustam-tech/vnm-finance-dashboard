@@ -15,6 +15,7 @@ export type RnpRow = {
   amoWonCount: number;
   amoWonRevenue: number;
   bookings: number;
+  bookingsValue: number;
 };
 
 export type RnpFunnel = {
@@ -48,6 +49,7 @@ export type WeekBlock = {
   amoWonCount: number;
   amoWonRevenue: number;
   bookings: number;
+  bookingsValue: number;
   budgetPlan: number | null;
   leadsPlan: number | null;
 };
@@ -113,6 +115,7 @@ export function groupIntoWeeks(
         amoWonCount: sorted.reduce((s, r) => s + r.amoWonCount, 0),
         amoWonRevenue: sorted.reduce((s, r) => s + r.amoWonRevenue, 0),
         bookings: sorted.reduce((s, r) => s + r.bookings, 0),
+        bookingsValue: sorted.reduce((s, r) => s + r.bookingsValue, 0),
         budgetPlan: anyPlan ? budgetPlan : null,
         leadsPlan: anyPlan ? Math.round(leadsPlan) : null,
       };
@@ -157,7 +160,7 @@ export async function getRnpData(projectId: string, fromDate: string, toDate: st
   `;
 
   const amoRows = await sql`
-    SELECT s.connection_id, s.date, s.new_leads, s.total_lead_value, s.won_count, s.won_revenue, s.booking_count, s.by_stage
+    SELECT s.connection_id, s.date, s.new_leads, s.total_lead_value, s.won_count, s.won_revenue, s.booking_count, s.booking_value, s.by_stage
     FROM amo_daily_snapshots s
     JOIN amo_connections c ON c.id = s.connection_id
     WHERE c.project_id = ${projectId} AND s.date >= ${fromDate} AND s.date <= ${toDate}
@@ -188,6 +191,7 @@ export async function getRnpData(projectId: string, fromDate: string, toDate: st
       amoWonCount: 0,
       amoWonRevenue: 0,
       bookings: 0,
+      bookingsValue: 0,
     });
   }
   const dateKey = (v: unknown) => (v instanceof Date ? v.toISOString().slice(0, 10) : String(v));
@@ -200,6 +204,7 @@ export async function getRnpData(projectId: string, fromDate: string, toDate: st
     entry.amoWonCount += Number(row.won_count);
     entry.amoWonRevenue += Number(row.won_revenue);
     entry.bookings += Number(row.booking_count);
+    entry.bookingsValue += Number(row.booking_value);
   }
   for (const row of adRows) {
     const currency = currencyByConnection.get(row.connection_id) ?? "KZT";

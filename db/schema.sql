@@ -150,6 +150,7 @@ CREATE TABLE IF NOT EXISTS amo_daily_snapshots (
   won_count        INTEGER NOT NULL DEFAULT 0,
   won_revenue      NUMERIC NOT NULL DEFAULT 0,
   booking_count    INTEGER NOT NULL DEFAULT 0, -- leads that transitioned INTO the connection's booking_stage_id on this day (via Events API — by_stage's snapshot-of-current-state can't tell entry date)
+  booking_value    NUMERIC NOT NULL DEFAULT 0, -- sum of price on those same leads
   by_stage         JSONB NOT NULL DEFAULT '[]',
   created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (connection_id, date)

@@ -16,6 +16,7 @@ type RnpRow = {
   amoWonCount: number;
   amoWonRevenue: number;
   bookings: number;
+  bookingsValue: number;
 };
 
 type Funnel = { connectionId: number; label: string; bookingStageName: string | null; stages: { name: string; count: number }[] };
@@ -34,6 +35,7 @@ type WeekBlock = {
   amoWonCount: number;
   amoWonRevenue: number;
   bookings: number;
+  bookingsValue: number;
   budgetPlan: number | null;
   leadsPlan: number | null;
 };
@@ -54,6 +56,7 @@ type Col = {
   amoWonCount: number;
   amoWonRevenue: number;
   bookings: number;
+  bookingsValue: number;
   budgetPlan: number | null;
   leadsPlan: number | null;
 };
@@ -191,8 +194,9 @@ export default function RnpTable({ projectId }: { projectId: number }) {
       amoWonCount: acc.amoWonCount + r.amoWonCount,
       amoWonRevenue: acc.amoWonRevenue + r.amoWonRevenue,
       bookings: acc.bookings + r.bookings,
+      bookingsValue: acc.bookingsValue + r.bookingsValue,
     }),
-    { adSpendKzt: 0, impressions: 0, clicks: 0, linkClicks: 0, adLeads: 0, amoNewLeads: 0, amoLeadValue: 0, amoWonCount: 0, amoWonRevenue: 0, bookings: 0 }
+    { adSpendKzt: 0, impressions: 0, clicks: 0, linkClicks: 0, adLeads: 0, amoNewLeads: 0, amoLeadValue: 0, amoWonCount: 0, amoWonRevenue: 0, bookings: 0, bookingsValue: 0 }
   );
   const hasUnconverted = rows.some((r) => r.hasUnconvertedSpend);
   const hasBookingStage = funnels.some((f) => f.bookingStageName);
@@ -215,6 +219,7 @@ export default function RnpTable({ projectId }: { projectId: number }) {
       amoWonCount: r.amoWonCount,
       amoWonRevenue: r.amoWonRevenue,
       bookings: r.bookings,
+      bookingsValue: r.bookingsValue,
       budgetPlan: target ? target.budgetPlan / dim : null,
       leadsPlan: target ? target.leadsPlan / dim : null,
     };
@@ -360,7 +365,7 @@ function MetricsMatrix({
   cols: Col[];
   totals: {
     adSpendKzt: number; impressions: number; clicks: number; linkClicks: number; adLeads: number;
-    amoNewLeads: number; amoLeadValue: number; amoWonCount: number; amoWonRevenue: number; bookings: number;
+    amoNewLeads: number; amoLeadValue: number; amoWonCount: number; amoWonRevenue: number; bookings: number; bookingsValue: number;
   };
   romi: number | null;
   hasBookingStage: boolean;
@@ -431,6 +436,7 @@ function MetricsMatrix({
           {hasBookingStage && (
             <>
               <MetricRow label="Записи" total={t.bookings} cells={cols.map((c) => c.bookings)} fmt={(n) => String(n)} highlight />
+              <MetricRow label="Записи, ₸" total={t.bookingsValue} cells={cols.map((c) => c.bookingsValue)} fmt={money} muted />
               <MetricRow
                 label="Конверсия ОП (запись → оплата), %"
                 total={opConversion}
