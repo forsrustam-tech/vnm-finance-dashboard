@@ -1,18 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { recentPeriods, formatPeriodShort, periodOf } from "@/lib/period";
 import FinanceAnalytics from "./finance-analytics";
 import ClientPaymentsTable from "./client-payments-table";
 
 type Assignment = {
   id: number;
+  user_id: number;
   payout_rate: string;
   project_id: number;
   project_name: string;
   user_name: string;
   created_at: string;
 };
+
+type TeamMember = { id: number; name: string; role_name: string };
 
 type Payout = {
   project_assignment_id: number;
@@ -39,7 +42,14 @@ export default function PayoutsTable() {
   const [payouts, setPayouts] = useState<Payout[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [clientPayments, setClientPayments] = useState<ClientPayment[]>([]);
+  const [allUsers, setAllUsers] = useState<TeamMember[]>([]);
+  const [canManageProjects, setCanManageProjects] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  const [rateDrafts, setRateDrafts] = useState<Record<number, string>>({});
+  const [newUserId, setNewUserId] = useState<Record<number, string>>({});
+  const [newRate, setNewRate] = useState<Record<number, string>>({});
+  const [assignError, setAssignError] = useState<Record<number, string>>({});
 
   async function load() {
     const res = await fetch("/api/payouts/table");
@@ -49,8 +59,44 @@ export default function PayoutsTable() {
       setPayouts(data.payouts);
       setProjects(data.projects ?? []);
       setClientPayments(data.clientPayments ?? []);
+      setAllUsers(data.allUsers ?? []);
+      setCanManageProjects(data.canManageProjects ?? false);
+      setRateDrafts(Object.fromEntries((data.assignments as Assignment[]).map((a) => [a.id, a.payout_rate])));
     }
     setLoading(false);
+  }
+
+  async function addAssignment(projectId: number, e: FormEvent) {
+    e.preventDefault();
+    setAssignError((prev) => ({ ...prev, [projectId]: "" }));
+    const res = await fetch(`/api/projects/${projectId}/assignments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: Number(newUserId[projectId]), payoutRate: Number(newRate[projectId]) }),
+    });
+    if (res.ok) {
+      setNewUserId((prev) => ({ ...prev, [projectId]: "" }));
+      setNewRate((prev) => ({ ...prev, [projectId]: "" }));
+      load();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setAssignError((prev) => ({ ...prev, [projectId]: data.error ?? "Ошибка назначения" }));
+    }
+  }
+
+  async function saveRate(assignmentId: number) {
+    const value = rateDrafts[assignmentId];
+    await fetch(`/api/assignments/${assignmentId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payoutRate: Number(value) }),
+    });
+    load();
+  }
+
+  async function removeAssignment(assignmentId: number) {
+    await fetch(`/api/assignments/${assignmentId}`, { method: "DELETE" });
+    load();
   }
 
   useEffect(() => {
@@ -115,6 +161,12 @@ export default function PayoutsTable() {
     group.rows.push(a);
     byProject.set(a.project_id, group);
   }
+  // Managers see every project, even ones with no team yet, so they can add
+  // the first person; read-only viewers only see projects that already have
+  // assignments (nothing else to look at otherwise).
+  const projectBlocks = canManageProjects
+    ? projects.map((p) => ({ id: p.id, name: p.name, rows: byProject.get(p.id)?.rows ?? [] }))
+    : [...byProject.entries()].map(([id, group]) => ({ id, name: group.name, rows: group.rows }));
 
   return (
     <div>
@@ -149,15 +201,99 @@ export default function PayoutsTable() {
         </div>
       </div>
 
-      {assignments.length === 0 ? (
+      {projectBlocks.length === 0 ? (
         <p className="mt-6 text-sm text-gray-500">Пока нет назначений на проекты.</p>
       ) : (
         <div className="mt-6 flex flex-col gap-6">
-          {[...byProject.entries()].map(([projectId, group]) => (
-            <div key={projectId} className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+          {projectBlocks.map((group) => (
+            <div key={group.id} className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
               <div className="border-b border-gray-100 p-4">
-                <p className="font-medium">{group.name}</p>
+                <p className="font-medium">
+                  {group.name} {group.rows.length > 0 && <span className="text-sm font-normal text-gray-400">({group.rows.length})</span>}
+                </p>
               </div>
+
+              {canManageProjects && (
+                <div className="border-b border-gray-100 bg-gray-50/60 p-4">
+                  {group.rows.length > 0 && (
+                    <div className="flex flex-col divide-y divide-gray-100">
+                      {group.rows.map((a) => (
+                        <div key={a.id} className="flex items-center justify-between gap-3 py-2">
+                          <span className="text-sm">{a.user_name}</span>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              min={0}
+                              value={rateDrafts[a.id] ?? ""}
+                              onChange={(e) => setRateDrafts((prev) => ({ ...prev, [a.id]: e.target.value }))}
+                              className="w-32 rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                            />
+                            <span className="text-xs text-gray-400">₸/мес</span>
+                            <button onClick={() => saveRate(a.id)} className="rounded-lg border border-gray-300 px-2 py-1 text-xs">
+                              Сохранить
+                            </button>
+                            <button onClick={() => removeAssignment(a.id)} className="text-xs text-red-600 underline">
+                              Убрать
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {(() => {
+                    const available = allUsers.filter((u) => !group.rows.some((a) => a.user_id === u.id));
+                    if (available.length === 0) {
+                      return group.rows.length === 0 ? (
+                        <p className="text-sm text-gray-500">
+                          В команде пока нет ни одного сотрудника.{" "}
+                          <a href="/team" className="underline">
+                            Добавьте сотрудников
+                          </a>
+                          , потом сможете назначить их сюда.
+                        </p>
+                      ) : (
+                        <p className="text-sm text-gray-500">Все сотрудники уже назначены на этот проект.</p>
+                      );
+                    }
+                    return (
+                      <form
+                        onSubmit={(e) => addAssignment(group.id, e)}
+                        className={`flex flex-wrap items-center gap-2 ${group.rows.length > 0 ? "mt-3 border-t border-gray-100 pt-3" : ""}`}
+                      >
+                        <select
+                          required
+                          value={newUserId[group.id] ?? ""}
+                          onChange={(e) => setNewUserId((prev) => ({ ...prev, [group.id]: e.target.value }))}
+                          className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+                        >
+                          <option value="">Выберите сотрудника</option>
+                          {available.map((u) => (
+                            <option key={u.id} value={u.id}>
+                              {u.name} ({u.role_name})
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          type="number"
+                          required
+                          min={0}
+                          placeholder="Ставка, ₸/мес"
+                          value={newRate[group.id] ?? ""}
+                          onChange={(e) => setNewRate((prev) => ({ ...prev, [group.id]: e.target.value }))}
+                          className="w-36 rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+                        />
+                        <button type="submit" className="rounded-lg bg-red-600 hover:bg-red-700 px-3 py-1.5 text-sm text-white">
+                          + Добавить в команду
+                        </button>
+                        {assignError[group.id] && <p className="w-full text-sm text-red-600">{assignError[group.id]}</p>}
+                      </form>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {group.rows.length > 0 && (
               <table className="w-full min-w-[640px] border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50">
@@ -235,6 +371,7 @@ export default function PayoutsTable() {
                   </tr>
                 </tfoot>
               </table>
+              )}
             </div>
           ))}
         </div>

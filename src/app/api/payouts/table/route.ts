@@ -9,7 +9,7 @@ export async function GET() {
   }
 
   const assignments = await sql`
-    SELECT pa.id, pa.payout_rate, pa.created_at, p.id AS project_id, p.name AS project_name, u.name AS user_name
+    SELECT pa.id, pa.user_id, pa.payout_rate, pa.created_at, p.id AS project_id, p.name AS project_name, u.name AS user_name
     FROM project_assignments pa
     JOIN projects p ON p.id = pa.project_id
     JOIN users u ON u.id = pa.user_id
@@ -24,5 +24,23 @@ export async function GET() {
 
   const clientPayments = await sql`SELECT project_id, period, status FROM client_payments`;
 
-  return NextResponse.json({ assignments, payouts, projects, clientPayments });
+  // Only needed to populate the "add to team" picker — skip the extra query
+  // for viewers who can't manage assignments anyway.
+  const allUsers = user.canManageProjects
+    ? await sql`
+        SELECT u.id, u.name, r.name AS role_name
+        FROM users u
+        JOIN roles r ON r.id = u.role_id
+        ORDER BY u.name
+      `
+    : [];
+
+  return NextResponse.json({
+    assignments,
+    payouts,
+    projects,
+    clientPayments,
+    allUsers,
+    canManageProjects: user.canManageProjects,
+  });
 }
