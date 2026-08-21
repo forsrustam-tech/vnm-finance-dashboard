@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomBytes } from "crypto";
 import { z } from "zod";
 import { sql } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
@@ -40,9 +41,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const webhookSecret = randomBytes(16).toString("hex");
+
   await sql`
-    INSERT INTO amo_connections (project_id, label, subdomain, access_token, connected_by)
-    VALUES (${projectId}, ${label}, ${cleanSubdomain}, ${accessToken}, ${user.id})
+    INSERT INTO amo_connections (project_id, label, subdomain, access_token, webhook_secret, connected_by)
+    VALUES (${projectId}, ${label}, ${cleanSubdomain}, ${accessToken}, ${webhookSecret}, ${user.id})
   `;
 
   return NextResponse.json({ ok: true });

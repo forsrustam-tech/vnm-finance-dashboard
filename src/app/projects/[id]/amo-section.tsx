@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-export type AmoConnection = { id: number; label: string; subdomain: string };
+export type AmoConnection = { id: number; label: string; subdomain: string; webhook_secret: string | null };
 
 type AmoSummary = {
   totalLeads: number;
@@ -114,6 +114,19 @@ function AmoConnectionCard({
   const [summary, setSummary] = useState<AmoSummary | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  const webhookUrl =
+    connection.webhook_secret && typeof window !== "undefined"
+      ? `${window.location.origin}/api/webhooks/amo/${connection.id}/${connection.webhook_secret}`
+      : null;
+
+  function copyWebhookUrl() {
+    if (!webhookUrl) return;
+    navigator.clipboard.writeText(webhookUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
 
   async function loadSummary() {
     setLoadingSummary(true);
@@ -163,6 +176,28 @@ function AmoConnectionCard({
       </div>
 
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+
+      {webhookUrl && (
+        <div className="mt-3 rounded-lg bg-gray-50 p-3">
+          <p className="text-xs font-medium text-gray-600">Реалтайм-обновление</p>
+          <p className="mt-0.5 text-xs text-gray-400">
+            Вставьте эту ссылку в amoCRM: Настройки → Веб-хуки → добавить, и отметьте события
+            «Сделка добавлена» и «Сделка изменена». Тогда цифры за сегодня будут обновляться сразу,
+            без ожидания ночного крона.
+          </p>
+          <div className="mt-2 flex items-center gap-2">
+            <code className="flex-1 truncate rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-600">
+              {webhookUrl}
+            </code>
+            <button
+              onClick={copyWebhookUrl}
+              className="shrink-0 rounded-md border border-gray-300 px-2 py-1 text-xs hover:bg-gray-100"
+            >
+              {copied ? "Скопировано" : "Копировать"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {summary && (
         <>

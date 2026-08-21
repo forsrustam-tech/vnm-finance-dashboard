@@ -94,6 +94,7 @@ CREATE TABLE IF NOT EXISTS amo_connections (
   label          TEXT NOT NULL, -- e.g. "Астана", "Алматы"
   subdomain      TEXT NOT NULL,
   access_token   TEXT NOT NULL, -- long-lived token from a private integration in the client's amoCRM
+  webhook_secret TEXT, -- random token embedded in this connection's webhook URL, checked on every call
   connected_by   INTEGER REFERENCES users(id),
   connected_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now()

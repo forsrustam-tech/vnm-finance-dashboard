@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
-import { fetchDailyAmoSnapshot } from "@/lib/amocrm";
 import { fetchDailyInsights } from "@/lib/meta";
-import { yesterdayDateStr, localDayRangeMs } from "@/lib/period";
+import { yesterdayDateStr } from "@/lib/period";
+import { syncAmoConnectionForDate } from "@/lib/amoSync";
 
-// Runs once a day (see vercel.json) and fills the shared RNP data both the
-// dashboard's per-project table and whatsapp-report-bot read from — neither
-// of those call amoCRM/Meta directly, only this job does.
+// Runs once a day (see vercel.json) and backfills yesterday for every
+// amoCRM/ad connection — the safety net behind the webhook receiver
+// (src/app/api/webhooks/amo/[connectionId]/[secret]/route.ts), which keeps
+// today's snapshot live in real time. If a webhook is missed or a connection
+// has none configured yet, this still catches it by the next morning.
 export async function GET(req: NextRequest) {
   const auth = req.headers.get("authorization");
   if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -14,21 +16,13 @@ export async function GET(req: NextRequest) {
   }
 
   const dateStr = yesterdayDateStr();
-  const { fromMs, toMs } = localDayRangeMs(dateStr);
 
   const amoConnections = await sql`SELECT id, subdomain, access_token FROM amo_connections`;
   const amoResults: { connectionId: number; ok: boolean; error?: string }[] = [];
 
   for (const conn of amoConnections) {
     try {
-      const snap = await fetchDailyAmoSnapshot(conn.subdomain, conn.access_token, fromMs, toMs);
-      await sql`
-        INSERT INTO amo_daily_snapshots (connection_id, date, new_leads, total_lead_value, won_count, won_revenue, by_stage)
-        VALUES (${conn.id}, ${dateStr}, ${snap.newLeads}, ${snap.totalLeadValue}, ${snap.wonCount}, ${snap.wonRevenue}, ${JSON.stringify(snap.byStage)})
-        ON CONFLICT (connection_id, date)
-        DO UPDATE SET new_leads = ${snap.newLeads}, total_lead_value = ${snap.totalLeadValue},
-                       won_count = ${snap.wonCount}, won_revenue = ${snap.wonRevenue}, by_stage = ${JSON.stringify(snap.byStage)}
-      `;
+      await syncAmoConnectionForDate(conn as { id: number; subdomain: string; access_token: string }, dateStr);
       amoResults.push({ connectionId: conn.id, ok: true });
     } catch (err) {
       amoResults.push({ connectionId: conn.id, ok: false, error: err instanceof Error ? err.message : String(err) });
