@@ -38,7 +38,10 @@ export async function GET(
     toDate = dates[dates.length - 1];
   }
 
-  const data = await getRnpData(id, fromDate, toDate);
+  const connectionIdParam = req.nextUrl.searchParams.get("connectionId");
+  const connectionId = connectionIdParam ? Number(connectionIdParam) : null;
+
+  const data = await getRnpData(id, fromDate, toDate, connectionId);
 
   const periods = [...new Set(data.rows.map((r) => r.date.slice(0, 7)))];
   const targetsByPeriod = await getMonthlyTargets(id, periods);

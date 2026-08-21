@@ -40,6 +40,7 @@ type WeekBlock = {
   leadsPlan: number | null;
 };
 type Target = { period: string; budgetPlan: number; leadsPlan: number };
+type AmoConnectionOption = { id: number; label: string };
 type Note = { id: number; week_start: string; note: string; created_at: string; created_by_name: string | null };
 
 // Shape a matrix column needs, regardless of whether it represents a week or a day.
@@ -93,6 +94,8 @@ export default function RnpTable({ projectId }: { projectId: number }) {
   const [hasAds, setHasAds] = useState(true);
   const [fromDate, setFromDate] = useState(() => daysAgoStr(13));
   const [toDate, setToDate] = useState(() => toDateStr(new Date()));
+  const [amoConnectionsList, setAmoConnectionsList] = useState<AmoConnectionOption[]>([]);
+  const [selectedConnectionId, setSelectedConnectionId] = useState<number | null>(null);
 
   const [notes, setNotes] = useState<Note[]>([]);
   const [noteDraft, setNoteDraft] = useState<Record<string, string>>({});
@@ -103,9 +106,10 @@ export default function RnpTable({ projectId }: { projectId: number }) {
   const [planLeads, setPlanLeads] = useState("");
   const [savingPlan, setSavingPlan] = useState(false);
 
-  async function load(from: string, to: string) {
+  async function load(from: string, to: string, connectionId: number | null) {
+    const cityParam = connectionId ? `&connectionId=${connectionId}` : "";
     const [rnpRes, notesRes] = await Promise.all([
-      fetch(`/api/projects/${projectId}/rnp?from=${from}&to=${to}`),
+      fetch(`/api/projects/${projectId}/rnp?from=${from}&to=${to}${cityParam}`),
       fetch(`/api/projects/${projectId}/notes?from=${from}&to=${to}`),
     ]);
     if (rnpRes.ok) {
@@ -119,6 +123,7 @@ export default function RnpTable({ projectId }: { projectId: number }) {
       setRomi(data.romi ?? null);
       setHasAmo(data.hasAmoConnections);
       setHasAds(data.hasAdConnections);
+      setAmoConnectionsList(data.amoConnectionsList ?? []);
     }
     if (notesRes.ok) {
       const data = await notesRes.json();
@@ -127,10 +132,10 @@ export default function RnpTable({ projectId }: { projectId: number }) {
   }
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch on mount and when the range changes
-    load(fromDate, toDate);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch on mount and when the range or city changes
+    load(fromDate, toDate, selectedConnectionId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fromDate, toDate]);
+  }, [fromDate, toDate, selectedConnectionId]);
 
   function applyPreset(days: number) {
     setFromDate(daysAgoStr(days - 1));
@@ -160,7 +165,7 @@ export default function RnpTable({ projectId }: { projectId: number }) {
     });
     if (res.ok) {
       setEditingPlan(false);
-      load(fromDate, toDate);
+      load(fromDate, toDate, selectedConnectionId);
     }
     setSavingPlan(false);
   }
@@ -176,7 +181,7 @@ export default function RnpTable({ projectId }: { projectId: number }) {
     if (res.ok) {
       setNoteDraft((prev) => ({ ...prev, [weekStart]: "" }));
       setAddingNoteFor(null);
-      load(fromDate, toDate);
+      load(fromDate, toDate, selectedConnectionId);
     }
   }
 
@@ -230,12 +235,32 @@ export default function RnpTable({ projectId }: { projectId: number }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-medium">РНП</h2>
         <a
-          href={`/api/projects/${projectId}/rnp/export?from=${fromDate}&to=${toDate}`}
+          href={`/api/projects/${projectId}/rnp/export?from=${fromDate}&to=${toDate}${selectedConnectionId ? `&connectionId=${selectedConnectionId}` : ""}`}
           className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
         >
           Скачать отчёт (.xlsx)
         </a>
       </div>
+
+      {amoConnectionsList.length > 1 && (
+        <div className="mt-3 flex gap-1 text-xs">
+          <button
+            onClick={() => setSelectedConnectionId(null)}
+            className={`rounded-md px-2.5 py-1 font-medium ${selectedConnectionId === null ? "bg-red-600 text-white" : "text-gray-500 hover:bg-gray-100"}`}
+          >
+            Все города
+          </button>
+          {amoConnectionsList.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => setSelectedConnectionId(c.id)}
+              className={`rounded-md px-2.5 py-1 font-medium ${selectedConnectionId === c.id ? "bg-red-600 text-white" : "text-gray-500 hover:bg-gray-100"}`}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <div className="flex gap-1 text-xs">

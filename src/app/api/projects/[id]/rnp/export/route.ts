@@ -32,9 +32,16 @@ export async function GET(
   }
 
   const projects = await sql`SELECT name FROM projects WHERE id = ${id}`;
-  const projectName = projects[0]?.name ?? `Проект ${id}`;
+  let projectName = projects[0]?.name ?? `Проект ${id}`;
 
-  const data = await getRnpData(id, fromDate, toDate);
+  const connectionIdParam = req.nextUrl.searchParams.get("connectionId");
+  const connectionId = connectionIdParam ? Number(connectionIdParam) : null;
+
+  const data = await getRnpData(id, fromDate, toDate, connectionId);
+  if (connectionId) {
+    const label = data.amoConnectionsList.find((c) => c.id === connectionId)?.label;
+    if (label) projectName = `${projectName} — ${label}`;
+  }
 
   const workbook = new ExcelJS.Workbook();
 

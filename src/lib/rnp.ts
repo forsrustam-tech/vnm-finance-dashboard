@@ -34,6 +34,7 @@ export type RnpData = {
   currencyNotes: RnpCurrencyNote[];
   hasAmoConnections: boolean;
   hasAdConnections: boolean;
+  amoConnectionsList: { id: number; label: string }[];
 };
 
 export type WeekBlock = {
@@ -143,7 +144,12 @@ function dateRange(fromDate: string, toDate: string): string[] {
   return out;
 }
 
-export async function getRnpData(projectId: string, fromDate: string, toDate: string): Promise<RnpData> {
+export async function getRnpData(
+  projectId: string,
+  fromDate: string,
+  toDate: string,
+  amoConnectionId?: number | null
+): Promise<RnpData> {
   const dates = dateRange(fromDate, toDate);
 
   const adConnections = await sql`
@@ -155,16 +161,25 @@ export async function getRnpData(projectId: string, fromDate: string, toDate: st
     if (!rateByCurrency.has(cur)) rateByCurrency.set(cur, await getKztRate(cur));
   }
 
-  const amoConnections = await sql`
+  // All of the project's amoCRM connections — e.g. one per city branch — kept
+  // unfiltered so the UI always has the full list to build a city switcher
+  // from, regardless of which one (if any) is currently selected.
+  const allAmoConnections = await sql`
     SELECT id, label, booking_stage_name FROM amo_connections WHERE project_id = ${projectId} ORDER BY label
   `;
+  const amoConnections = amoConnectionId
+    ? allAmoConnections.filter((c) => c.id === amoConnectionId)
+    : allAmoConnections;
 
-  const amoRows = await sql`
+  const allAmoRows = await sql`
     SELECT s.connection_id, s.date, s.new_leads, s.total_lead_value, s.won_count, s.won_revenue, s.booking_count, s.booking_value, s.by_stage
     FROM amo_daily_snapshots s
     JOIN amo_connections c ON c.id = s.connection_id
     WHERE c.project_id = ${projectId} AND s.date >= ${fromDate} AND s.date <= ${toDate}
   `;
+  const amoRows = amoConnectionId
+    ? allAmoRows.filter((r) => r.connection_id === amoConnectionId)
+    : allAmoRows;
 
   const adRows = await sql`
     SELECT s.connection_id, s.date, s.spend, s.impressions, s.clicks, s.link_clicks, s.leads
@@ -265,7 +280,8 @@ export async function getRnpData(projectId: string, fromDate: string, toDate: st
     platforms,
     funnels,
     currencyNotes,
-    hasAmoConnections: amoConnections.length > 0,
+    hasAmoConnections: allAmoConnections.length > 0,
     hasAdConnections: adConnections.length > 0,
+    amoConnectionsList: allAmoConnections.map((c) => ({ id: c.id, label: c.label })),
   };
 }
