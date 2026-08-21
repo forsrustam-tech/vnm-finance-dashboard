@@ -18,6 +18,47 @@ export type AmoSummary = {
   recentLeads: { name: string; price: number; stageName: string; createdAt: string }[];
 };
 
+type AmoEvent = { entity_id: number; created_at: number; value_after?: { lead_status?: { id: number } }[] };
+
+// Counts leads that transitioned INTO `statusId` within [fromMs, toMs), by the
+// actual moment of transition (via the Events API), not by created_at — a
+// lead created last week but moved into this stage today should count today,
+// which a leads-list filtered by created_at can never tell you.
+export async function fetchStageEntryCount(
+  subdomain: string,
+  token: string,
+  statusId: number,
+  fromMs: number,
+  toMs: number
+): Promise<number> {
+  const headers = { Authorization: `Bearer ${token}` };
+  const base = `https://${subdomain}.amocrm.ru/api/v4`;
+  const from = Math.floor(fromMs / 1000);
+  const to = Math.floor(toMs / 1000);
+
+  let count = 0;
+  let page = 1;
+  // Guard against an unbounded loop on a very busy pipeline — 10 pages of
+  // 250 is 2500 status-change events in one day, far beyond any realistic
+  // single-connection volume this dashboard serves.
+  for (; page <= 10; page++) {
+    const res = await fetch(
+      `${base}/events?filter[type]=lead_status_changed&filter[entity]=lead&filter[created_at][from]=${from}&filter[created_at][to]=${to}&limit=250&page=${page}`,
+      { headers }
+    );
+    if (res.status === 204) break; // amoCRM returns 204 (no body) once a filtered page is empty
+    if (!res.ok) throw new Error(`amoCRM events fetch failed: ${res.status}`);
+    const data = await res.json();
+    const events: AmoEvent[] = data._embedded?.events ?? [];
+    if (events.length === 0) break;
+    for (const ev of events) {
+      if (ev.value_after?.[0]?.lead_status?.id === statusId) count += 1;
+    }
+    if (events.length < 250) break;
+  }
+  return count;
+}
+
 export async function fetchAmoSummary(subdomain: string, token: string): Promise<AmoSummary> {
   const headers = { Authorization: `Bearer ${token}` };
   const base = `https://${subdomain}.amocrm.ru/api/v4`;

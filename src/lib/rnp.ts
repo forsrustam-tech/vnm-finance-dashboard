@@ -155,12 +155,9 @@ export async function getRnpData(projectId: string, fromDate: string, toDate: st
   const amoConnections = await sql`
     SELECT id, label, booking_stage_name FROM amo_connections WHERE project_id = ${projectId} ORDER BY label
   `;
-  const bookingStageByConnection = new Map(
-    amoConnections.filter((c) => c.booking_stage_name).map((c) => [c.id, c.booking_stage_name as string])
-  );
 
   const amoRows = await sql`
-    SELECT s.connection_id, s.date, s.new_leads, s.total_lead_value, s.won_count, s.won_revenue, s.by_stage
+    SELECT s.connection_id, s.date, s.new_leads, s.total_lead_value, s.won_count, s.won_revenue, s.booking_count, s.by_stage
     FROM amo_daily_snapshots s
     JOIN amo_connections c ON c.id = s.connection_id
     WHERE c.project_id = ${projectId} AND s.date >= ${fromDate} AND s.date <= ${toDate}
@@ -202,13 +199,7 @@ export async function getRnpData(projectId: string, fromDate: string, toDate: st
     entry.amoLeadValue += Number(row.total_lead_value);
     entry.amoWonCount += Number(row.won_count);
     entry.amoWonRevenue += Number(row.won_revenue);
-
-    const bookingStage = bookingStageByConnection.get(row.connection_id);
-    if (bookingStage) {
-      const stages = typeof row.by_stage === "string" ? JSON.parse(row.by_stage) : row.by_stage ?? [];
-      const match = (stages as { name: string; count: number }[]).find((s) => s.name === bookingStage);
-      entry.bookings += match ? Number(match.count) : 0;
-    }
+    entry.bookings += Number(row.booking_count);
   }
   for (const row of adRows) {
     const currency = currencyByConnection.get(row.connection_id) ?? "KZT";

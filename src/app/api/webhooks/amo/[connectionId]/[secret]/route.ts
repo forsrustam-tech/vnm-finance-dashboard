@@ -18,7 +18,7 @@ export async function POST(
   const { connectionId, secret } = await params;
 
   const rows = await sql`
-    SELECT id, subdomain, access_token, webhook_secret FROM amo_connections WHERE id = ${connectionId}
+    SELECT id, subdomain, access_token, webhook_secret, booking_stage_id FROM amo_connections WHERE id = ${connectionId}
   `;
   const connection = rows[0];
   if (!connection || connection.webhook_secret !== secret) {
@@ -29,7 +29,12 @@ export async function POST(
 
   try {
     await syncAmoConnectionForDate(
-      { id: connection.id, subdomain: connection.subdomain, access_token: connection.access_token },
+      {
+        id: connection.id,
+        subdomain: connection.subdomain,
+        access_token: connection.access_token,
+        booking_stage_id: connection.booking_stage_id,
+      },
       todayStr
     );
     return NextResponse.json({ ok: true, date: todayStr });

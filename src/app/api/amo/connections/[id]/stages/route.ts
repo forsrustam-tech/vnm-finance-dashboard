@@ -11,7 +11,7 @@ export async function GET(
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  const rows = await sql`SELECT subdomain, access_token, project_id, booking_stage_name FROM amo_connections WHERE id = ${id}`;
+  const rows = await sql`SELECT subdomain, access_token, project_id, booking_stage_id FROM amo_connections WHERE id = ${id}`;
   const connection = rows[0];
   if (!connection) return NextResponse.json({ error: "Подключение не найдено" }, { status: 404 });
 
@@ -23,7 +23,7 @@ export async function GET(
 
   try {
     const stages = await fetchPipelineStages(connection.subdomain, connection.access_token);
-    return NextResponse.json({ stages, bookingStageName: connection.booking_stage_name });
+    return NextResponse.json({ stages, bookingStageId: connection.booking_stage_id });
   } catch {
     return NextResponse.json({ error: "Не удалось получить этапы из amoCRM" }, { status: 502 });
   }

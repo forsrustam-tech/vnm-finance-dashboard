@@ -17,12 +17,15 @@ export async function GET(req: NextRequest) {
 
   const dateStr = yesterdayDateStr();
 
-  const amoConnections = await sql`SELECT id, subdomain, access_token FROM amo_connections`;
+  const amoConnections = await sql`SELECT id, subdomain, access_token, booking_stage_id FROM amo_connections`;
   const amoResults: { connectionId: number; ok: boolean; error?: string }[] = [];
 
   for (const conn of amoConnections) {
     try {
-      await syncAmoConnectionForDate(conn as { id: number; subdomain: string; access_token: string }, dateStr);
+      await syncAmoConnectionForDate(
+        conn as { id: number; subdomain: string; access_token: string; booking_stage_id: number | null },
+        dateStr
+      );
       amoResults.push({ connectionId: conn.id, ok: true });
     } catch (err) {
       amoResults.push({ connectionId: conn.id, ok: false, error: err instanceof Error ? err.message : String(err) });

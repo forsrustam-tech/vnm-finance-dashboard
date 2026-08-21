@@ -119,7 +119,7 @@ function AmoConnectionCard({
   const [copied, setCopied] = useState(false);
 
   const [stages, setStages] = useState<Stage[] | null>(null);
-  const [bookingStageName, setBookingStageName] = useState<string | null>(null);
+  const [bookingStageId, setBookingStageId] = useState<number | null>(null);
   const [loadingStages, setLoadingStages] = useState(false);
   const [stagesError, setStagesError] = useState("");
   const [savingStage, setSavingStage] = useState(false);
@@ -131,7 +131,7 @@ function AmoConnectionCard({
     if (res.ok) {
       const data = await res.json();
       setStages(data.stages);
-      setBookingStageName(data.bookingStageName ?? null);
+      setBookingStageId(data.bookingStageId ?? null);
     } else {
       const data = await res.json().catch(() => ({}));
       setStagesError(data.error ?? "Не удалось получить этапы");
@@ -139,15 +139,16 @@ function AmoConnectionCard({
     setLoadingStages(false);
   }
 
-  async function saveBookingStage(name: string) {
+  async function saveBookingStage(idStr: string) {
     setSavingStage(true);
-    const value = name || null;
+    const id = idStr ? Number(idStr) : null;
+    const stage = stages?.find((s) => s.id === id) ?? null;
     const res = await fetch(`/api/amo/connections/${connection.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ bookingStageName: value }),
+      body: JSON.stringify({ bookingStageId: id, bookingStageName: stage?.name ?? null }),
     });
-    if (res.ok) setBookingStageName(value);
+    if (res.ok) setBookingStageId(id);
     setSavingStage(false);
   }
 
@@ -240,19 +241,22 @@ function AmoConnectionCard({
         {stagesError && <p className="mt-1 text-xs text-red-600">{stagesError}</p>}
         {stages && (
           <select
-            value={bookingStageName ?? ""}
+            value={bookingStageId ?? ""}
             onChange={(e) => saveBookingStage(e.target.value)}
             disabled={savingStage}
             className="mt-1.5 w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs"
           >
             <option value="">Не выбрано</option>
             {stages.map((s) => (
-              <option key={s.id} value={s.name}>
+              <option key={s.id} value={s.id}>
                 {s.name} ({s.pipelineName})
               </option>
             ))}
           </select>
         )}
+        <p className="mt-1 text-[10px] text-gray-400">
+          Считается по дате фактического перехода в этап (Events API), а не по дате создания лида.
+        </p>
         {loadingStages && !stages && <p className="mt-1 text-xs text-gray-400">Загружаю этапы...</p>}
       </div>
 

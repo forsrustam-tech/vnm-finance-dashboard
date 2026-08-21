@@ -95,7 +95,8 @@ CREATE TABLE IF NOT EXISTS amo_connections (
   subdomain      TEXT NOT NULL,
   access_token   TEXT NOT NULL, -- long-lived token from a private integration in the client's amoCRM
   webhook_secret TEXT, -- random token embedded in this connection's webhook URL, checked on every call
-  booking_stage_name TEXT, -- which pipeline stage counts as "booked" (Записи) in the РНП table
+  booking_stage_name TEXT, -- which pipeline stage counts as "booked" (Записи) in the РНП table — display only
+  booking_stage_id INTEGER, -- same stage, by id — drives the Events-API query (created_at is unreliable for "date entered this stage")
   connected_by   INTEGER REFERENCES users(id),
   connected_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -148,6 +149,7 @@ CREATE TABLE IF NOT EXISTS amo_daily_snapshots (
   total_lead_value NUMERIC NOT NULL DEFAULT 0, -- sum of price on leads created this day (pipeline value entering, not yet won)
   won_count        INTEGER NOT NULL DEFAULT 0,
   won_revenue      NUMERIC NOT NULL DEFAULT 0,
+  booking_count    INTEGER NOT NULL DEFAULT 0, -- leads that transitioned INTO the connection's booking_stage_id on this day (via Events API — by_stage's snapshot-of-current-state can't tell entry date)
   by_stage         JSONB NOT NULL DEFAULT '[]',
   created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (connection_id, date)

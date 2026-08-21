@@ -9,7 +9,10 @@ async function canAccessConnection(user: { id: number; canManageProjects: boolea
   return rows.length > 0;
 }
 
-const patchSchema = z.object({ bookingStageName: z.string().nullable() });
+const patchSchema = z.object({
+  bookingStageName: z.string().nullable(),
+  bookingStageId: z.number().nullable().optional(),
+});
 
 export async function PATCH(
   req: NextRequest,
@@ -29,7 +32,11 @@ export async function PATCH(
   const parsed = patchSchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: "Некорректные данные" }, { status: 400 });
 
-  await sql`UPDATE amo_connections SET booking_stage_name = ${parsed.data.bookingStageName} WHERE id = ${id}`;
+  await sql`
+    UPDATE amo_connections
+    SET booking_stage_name = ${parsed.data.bookingStageName}, booking_stage_id = ${parsed.data.bookingStageId ?? null}
+    WHERE id = ${id}
+  `;
   return NextResponse.json({ ok: true });
 }
 
