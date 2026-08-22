@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/rnp-snapshot",
       "schedule": "30 2 * * *"
+    },
+    {
+      "path": "/api/cron/sheet-snapshot",
+      "schedule": "30 6 * * *"
     }
   ]
 }
