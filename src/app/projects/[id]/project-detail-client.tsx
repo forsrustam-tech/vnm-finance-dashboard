@@ -201,15 +201,13 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
                   currency === "KZT"
                     ? `${n.toLocaleString("ru-RU", { maximumFractionDigits: 0 })} ₸`
                     : `${currency} ${n.toFixed(2)}`;
-                const platformLabel = c.platform === "meta" ? "Meta Ads" : c.platform === "manual" ? "Вручную" : c.platform;
+                const platformLabel =
+                  c.platform === "meta" ? "Meta Ads" : c.platform === "google_sheet" ? "Google Таблица" : c.platform === "manual" ? "Вручную" : c.platform;
                 return (
                   <div key={c.id} className="rounded-lg border border-gray-100 p-4">
                     <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium">
-                        {platformLabel}
-                        {c.ad_account_id ? ` — ${c.ad_account_id}` : ""}
-                      </p>
-                      {c.platform !== "manual" && (
+                      <p className="text-sm font-medium">{platformLabel}</p>
+                      {c.platform !== "manual" && c.platform !== "google_sheet" && (
                         <button
                           onClick={() => syncConnection(c.id)}
                           disabled={syncingId === c.id}
