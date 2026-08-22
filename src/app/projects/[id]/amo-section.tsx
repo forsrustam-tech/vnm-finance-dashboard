@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from "react";
 
-export type AmoConnection = { id: number; label: string; subdomain: string; webhook_secret: string | null };
+export type AmoConnection = {
+  id: number;
+  label: string;
+  subdomain: string | null;
+  webhook_secret: string | null;
+  source: string;
+};
 
 type Stage = { id: number; name: string; pipelineName: string };
 
@@ -56,9 +62,13 @@ export default function AmoSection({
         <p className="mt-3 text-sm text-gray-500">Пока не подключено ни одного аккаунта.</p>
       ) : (
         <div className="mt-3 flex flex-col gap-3">
-          {connections.map((c) => (
-            <AmoConnectionCard key={c.id} connection={c} onChange={onChange} />
-          ))}
+          {connections.map((c) =>
+            c.source === "google_sheet" ? (
+              <SheetConnectionCard key={c.id} connection={c} onChange={onChange} />
+            ) : (
+              <AmoConnectionCard key={c.id} connection={c} onChange={onChange} />
+            )
+          )}
         </div>
       )}
 
@@ -288,6 +298,42 @@ function AmoConnectionCard({
           )}
         </>
       )}
+    </div>
+  );
+}
+
+// A connection sourced from the agency's own Google Sheet instead of a real
+// amoCRM API — for clients whose CRM doesn't expose one at all. No live
+// stage picker or webhook here: the daily cron reads the sheet directly and
+// fills the same amo_daily_snapshots rows a real amoCRM connection would.
+function SheetConnectionCard({
+  connection,
+  onChange,
+}: {
+  connection: AmoConnection;
+  onChange: () => void;
+}) {
+  async function disconnect() {
+    if (!confirm(`Отключить «${connection.label}» (Google Таблица) от этого проекта?`)) return;
+    await fetch(`/api/amo/connections/${connection.id}`, { method: "DELETE" });
+    onChange();
+  }
+
+  return (
+    <div className="rounded-lg border border-gray-100 p-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium">{connection.label}</p>
+          <p className="text-xs text-gray-400">Источник: Google Таблица (CRM без API)</p>
+        </div>
+        <button onClick={disconnect} className="rounded-lg border border-gray-300 px-3 py-1 text-xs text-red-600">
+          Отключить
+        </button>
+      </div>
+      <p className="mt-2 text-xs text-gray-400">
+        Заявки, записи и оплаты подтягиваются ежедневно из той же таблицы, что и рекламный бюджет — без ручного
+        ввода.
+      </p>
     </div>
   );
 }

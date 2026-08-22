@@ -20,12 +20,35 @@ const ROW_LABELS = {
   leads: "Получено Лидов",
 };
 
+// Sales-funnel rows, for clients whose CRM has no API at all — read
+// straight from the same sheet instead of amo_daily_snapshots being filled
+// by a real amoCRM sync. "Записи" maps to this template's "Диагностика"
+// booking step; its ₸ value isn't given as a direct sum, so it's derived as
+// count × price-per-record (both given), same as everywhere else in this
+// template computes a per-unit price from a total.
+const FUNNEL_ROW_LABELS = {
+  newLeads: "Получено лидов отделом продаж",
+  bookingCount: "Количество записанных на Диагностику",
+  bookingPriceKzt: "Цена записи на Диагностику- (тенге) ₸",
+  wonCount: "Кол-во продаж основного Продукта",
+  wonRevenueKzt: "Общая сумма оплат Основной продукт - (тенге) ₸",
+};
+
 export type SheetDaySnapshot = {
   date: string; // 'YYYY-MM-DD'
   spend: number;
   impressions: number;
   clicks: number;
   leads: number;
+};
+
+export type SheetFunnelDaySnapshot = {
+  date: string; // 'YYYY-MM-DD'
+  newLeads: number;
+  bookingCount: number;
+  bookingValue: number;
+  wonCount: number;
+  wonRevenue: number;
 };
 
 function parseRuNumber(raw: string): number {
@@ -91,13 +114,9 @@ function monthTabName(dateStr: string): string {
   return RU_MONTHS[month - 1];
 }
 
-// Parses one month's tab into a day snapshot for every day column that has
-// spend data filled in. Rows are matched by label, not position; day columns
-// are matched by their "D.M, weekday" header against the tab's own month.
-export function parseMonthTab(csvRows: string[][], year: number, month: number): SheetDaySnapshot[] {
-  if (csvRows.length === 0) return [];
-  const header = csvRows[0];
-
+// Day columns matched by their "D.M, weekday" header against the tab's own
+// month — shared by both the ad-spend and funnel parsers below.
+function findDayColumns(header: string[], year: number, month: number): { colIndex: number; date: string }[] {
   const dayCols: { colIndex: number; date: string }[] = [];
   for (let i = 0; i < header.length; i++) {
     const m = header[i].trim().match(/^(\d{1,2})\.(\d{1,2}),/);
@@ -108,12 +127,25 @@ export function parseMonthTab(csvRows: string[][], year: number, month: number):
     const date = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     dayCols.push({ colIndex: i, date });
   }
+  return dayCols;
+}
 
+function indexRowsByLabel(csvRows: string[][]): Map<string, string[]> {
   const rowByLabel = new Map<string, string[]>();
   for (const row of csvRows) {
     const label = (row[3] ?? "").trim();
     if (label) rowByLabel.set(label, row);
   }
+  return rowByLabel;
+}
+
+// Parses one month's tab into a day snapshot for every day column that has
+// spend data filled in. Rows are matched by label, not position, since a
+// tab's row layout can shift between months.
+export function parseMonthTab(csvRows: string[][], year: number, month: number): SheetDaySnapshot[] {
+  if (csvRows.length === 0) return [];
+  const dayCols = findDayColumns(csvRows[0], year, month);
+  const rowByLabel = indexRowsByLabel(csvRows);
 
   const spendRow = rowByLabel.get(ROW_LABELS.spendKzt);
   const impressionsRow = rowByLabel.get(ROW_LABELS.impressions);
@@ -135,6 +167,34 @@ export function parseMonthTab(csvRows: string[][], year: number, month: number):
   return out;
 }
 
+// Parses one month's tab into a sales-funnel day snapshot — for clients
+// whose CRM has no API, so this sheet is the only source of Заявки/Записи/
+// Оплаты, not just ad spend.
+export function parseFunnelMonthTab(csvRows: string[][], year: number, month: number): SheetFunnelDaySnapshot[] {
+  if (csvRows.length === 0) return [];
+  const dayCols = findDayColumns(csvRows[0], year, month);
+  const rowByLabel = indexRowsByLabel(csvRows);
+
+  const newLeadsRow = rowByLabel.get(FUNNEL_ROW_LABELS.newLeads);
+  const bookingCountRow = rowByLabel.get(FUNNEL_ROW_LABELS.bookingCount);
+  const bookingPriceRow = rowByLabel.get(FUNNEL_ROW_LABELS.bookingPriceKzt);
+  const wonCountRow = rowByLabel.get(FUNNEL_ROW_LABELS.wonCount);
+  const wonRevenueRow = rowByLabel.get(FUNNEL_ROW_LABELS.wonRevenueKzt);
+  if (!newLeadsRow) return [];
+
+  const out: SheetFunnelDaySnapshot[] = [];
+  for (const { colIndex, date } of dayCols) {
+    const newLeads = parseRuNumber(newLeadsRow[colIndex] ?? "");
+    const bookingCount = bookingCountRow ? parseRuNumber(bookingCountRow[colIndex] ?? "") : 0;
+    const bookingPrice = bookingPriceRow ? parseRuNumber(bookingPriceRow[colIndex] ?? "") : 0;
+    const wonCount = wonCountRow ? parseRuNumber(wonCountRow[colIndex] ?? "") : 0;
+    const wonRevenue = wonRevenueRow ? parseRuNumber(wonRevenueRow[colIndex] ?? "") : 0;
+    if (newLeads === 0 && bookingCount === 0 && wonCount === 0 && wonRevenue === 0) continue;
+    out.push({ date, newLeads, bookingCount, bookingValue: bookingCount * bookingPrice, wonCount, wonRevenue });
+  }
+  return out;
+}
+
 // Fetches and parses the month tab containing `dateStr` ('YYYY-MM-DD').
 export async function fetchSheetMonthSnapshots(sheetId: string, dateStr: string): Promise<SheetDaySnapshot[]> {
   const year = Number(dateStr.slice(0, 4));
@@ -142,4 +202,12 @@ export async function fetchSheetMonthSnapshots(sheetId: string, dateStr: string)
   const tabName = monthTabName(dateStr);
   const csvRows = await fetchTabCsv(sheetId, tabName);
   return parseMonthTab(csvRows, year, month);
+}
+
+export async function fetchSheetMonthFunnel(sheetId: string, dateStr: string): Promise<SheetFunnelDaySnapshot[]> {
+  const year = Number(dateStr.slice(0, 4));
+  const month = Number(dateStr.slice(5, 7));
+  const tabName = monthTabName(dateStr);
+  const csvRows = await fetchTabCsv(sheetId, tabName);
+  return parseFunnelMonthTab(csvRows, year, month);
 }

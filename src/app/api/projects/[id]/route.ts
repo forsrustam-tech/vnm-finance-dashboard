@@ -94,7 +94,7 @@ export async function GET(
     : [];
 
   const amoConnections = await sql`
-    SELECT id, label, subdomain, webhook_secret FROM amo_connections WHERE project_id = ${id} ORDER BY created_at
+    SELECT id, label, subdomain, webhook_secret, source FROM amo_connections WHERE project_id = ${id} ORDER BY created_at
   `;
 
   const whatsappReportGroups = await sql`

@@ -88,12 +88,19 @@ CREATE TABLE IF NOT EXISTS project_documents (
 );
 
 -- A project can have more than one amoCRM account (e.g. separate branches/cities).
+-- Also doubles as the funnel-data source when a client's CRM has no API at
+-- all (source = 'google_sheet') — subdomain/access_token are amoCRM-only and
+-- nullable for that case; sheet_id points at the same agency РНП spreadsheet
+-- pattern used for ad-spend-only clients, but read for the sales-funnel rows
+-- (Записи/Оплаты) instead of just the marketing ones.
 CREATE TABLE IF NOT EXISTS amo_connections (
   id             SERIAL PRIMARY KEY,
   project_id     INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   label          TEXT NOT NULL, -- e.g. "Астана", "Алматы"
-  subdomain      TEXT NOT NULL,
-  access_token   TEXT NOT NULL, -- long-lived token from a private integration in the client's amoCRM
+  source         TEXT NOT NULL DEFAULT 'amocrm', -- 'amocrm' | 'google_sheet'
+  sheet_id       TEXT, -- Google Sheets file id, when source = 'google_sheet'
+  subdomain      TEXT,
+  access_token   TEXT, -- long-lived token from a private integration in the client's amoCRM
   webhook_secret TEXT, -- random token embedded in this connection's webhook URL, checked on every call
   booking_stage_name TEXT, -- which pipeline stage counts as "booked" (Записи) in the РНП table — display only
   booking_stage_id INTEGER, -- same stage, by id — drives the Events-API query (created_at is unreliable for "date entered this stage")
