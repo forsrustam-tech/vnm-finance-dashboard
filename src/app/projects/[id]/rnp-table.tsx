@@ -407,7 +407,7 @@ function MetricsMatrix({
   const cpm = t.impressions > 0 ? (t.adSpendKzt / t.impressions) * 1000 : null;
   const ctr = t.impressions > 0 ? (t.clicks / t.impressions) * 100 : null;
   const leadToBookingConversion = t.amoNewLeads > 0 ? (t.bookings / t.amoNewLeads) * 100 : null;
-  const avgDeal = t.amoNewLeads > 0 ? t.amoLeadValue / t.amoNewLeads : null;
+  const avgDeal = t.amoWonCount > 0 ? t.amoWonRevenue / t.amoWonCount : null;
 
   const showNotes = Boolean(notes && setNoteDraft && setAddingNoteFor && addNote);
 
@@ -467,7 +467,7 @@ function MetricsMatrix({
           <MetricRow
             label="Средний чек, ₸"
             total={avgDeal}
-            cells={cols.map((c) => (c.amoNewLeads > 0 ? c.amoLeadValue / c.amoNewLeads : null))}
+            cells={cols.map((c) => (c.amoWonCount > 0 ? c.amoWonRevenue / c.amoWonCount : null))}
             fmt={money}
             muted
           />
